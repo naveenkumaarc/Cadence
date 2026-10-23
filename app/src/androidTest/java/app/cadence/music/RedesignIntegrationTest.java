@@ -58,12 +58,6 @@ public class RedesignIntegrationTest {
       bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
     }
     bitmap.recycle();
-    // Preserve the capture after Gradle removes the disposable test app.
-    try (java.io.InputStream stream = new android.os.ParcelFileDescriptor.AutoCloseInputStream(
-        instrumentation.getUiAutomation().executeShellCommand("run-as app.cadence.player cat "
-            + file.getAbsolutePath() + " > /data/local/tmp/cadence-" + name + ".png"))) {
-      byte[] drain = new byte[256]; while (stream.read(drain) != -1) { }
-    }
   }
 
   @Test public void historyPersistsDeduplicatesAndRemovesWithoutChangingLibrary() throws Exception {

@@ -27,7 +27,7 @@ jobs:
         run: ./gradlew --no-daemon -PcadenceUnsigned :core:test :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease :app:lintRelease
       - name: Enable emulator acceleration
         run: sudo chmod a+rw /dev/kvm
-      - name: Native Android tests and screenshots
+      - name: Native Android tests
         uses: ReactiveCircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808
         with:
           api-level: 30
@@ -36,7 +36,7 @@ jobs:
           profile: pixel_5
           disable-animations: true
           script: bash tools/run-native-checks.sh
-      - name: Save APKs, reports and screen captures
+      - name: Save APKs and test reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -46,4 +46,3 @@ jobs:
             app/build/outputs/apk/
             app/build/reports/
             core/build/test-results/
-            artifacts/screenshots/
