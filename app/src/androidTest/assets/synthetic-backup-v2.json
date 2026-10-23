@@ -1,0 +1,8 @@
+{
+  "format": "cadence.backup",
+  "version": 2,
+  "playlists": [
+    {"id": "synthetic-migration-fixture", "name": "Migration fixture", "origin": "", "tracks": []}
+  ],
+  "playback": {"autoplay": false}
+}

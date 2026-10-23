@@ -1533,8 +1533,8 @@ public final class MainActivity extends Activity {
         new LinearLayout.LayoutParams(dp(48), dp(48)));
     surface.addView(top);
     playerArt = new Artwork(this);
-    int artDp = Math.max(120, Math.min(340, Math.min(getResources().getConfiguration().screenWidthDp - 48,
-        (int)(getResources().getConfiguration().screenHeightDp * .36f))));
+    int artDp = Math.max(120, Math.min(320, Math.min(getResources().getConfiguration().screenWidthDp - 48,
+        (int)(getResources().getConfiguration().screenHeightDp * .30f))));
     LinearLayout hero = row(); hero.setGravity(Gravity.CENTER);
     hero.addView(playerArt,new LinearLayout.LayoutParams(dp(artDp),dp(artDp)));
     LinearLayout.LayoutParams artSize = new LinearLayout.LayoutParams(-1,-2);
@@ -1555,7 +1555,7 @@ public final class MainActivity extends Activity {
     playerSeek.setMax(1000);
     playerSeek.setContentDescription("Playback position");
     playerSeek.setSplitTrack(false);
-    playerSeek.setPadding(dp(2), 0, dp(2), 0);
+    playerSeek.setPadding(dp(8), 0, dp(8), 0);
     playerSeek.setProgressTintList(ColorStateList.valueOf(INK));
     playerSeek.setProgressBackgroundTintList(ColorStateList.valueOf(Color.rgb(93, 101, 97)));
     playerSeek.setThumbTintList(ColorStateList.valueOf(INK));

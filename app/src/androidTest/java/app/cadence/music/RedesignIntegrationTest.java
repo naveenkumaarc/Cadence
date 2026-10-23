@@ -53,10 +53,17 @@ public class RedesignIntegrationTest {
   private void screenshot(String name) throws Exception {
     instrumentation.waitForIdleSync(); Thread.sleep(300);
     Bitmap bitmap = instrumentation.getUiAutomation().takeScreenshot(); assertNotNull(bitmap);
-    try (FileOutputStream out = new FileOutputStream(new File(context.getExternalFilesDir(null), name + ".png"))) {
+    File file = new File(context.getFilesDir(), name + ".png");
+    try (FileOutputStream out = new FileOutputStream(file)) {
       bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
     }
     bitmap.recycle();
+    // Preserve the capture after Gradle removes the disposable test app.
+    try (java.io.InputStream stream = new android.os.ParcelFileDescriptor.AutoCloseInputStream(
+        instrumentation.getUiAutomation().executeShellCommand("run-as app.cadence.player cat "
+            + file.getAbsolutePath() + " > /data/local/tmp/cadence-" + name + ".png"))) {
+      byte[] drain = new byte[256]; while (stream.read(drain) != -1) { }
+    }
   }
 
   @Test public void historyPersistsDeduplicatesAndRemovesWithoutChangingLibrary() throws Exception {
@@ -73,6 +80,16 @@ public class RedesignIntegrationTest {
   }
 
   @Test public void nativeScreensAndPlayerSeekKeepElapsedAndRemainingInSync() throws Exception {
+    // Public CI uses synthetic data. Optional private migration inputs stay on the test device.
+    String migration = InstrumentationRegistry.getArguments().getString("migrationBackup");
+    String expectedPlaylist = InstrumentationRegistry.getArguments().getString("migrationPlaylist", "Migration fixture");
+    if (migration == null) {
+      try (java.io.InputStream in = instrumentation.getContext().getAssets().open("synthetic-backup-v2.json")) {
+        migration = new String(Podcasts.readLimited(in, 1024*1024), StandardCharsets.UTF_8);
+      }
+    }
+    Backup.restore(context, new org.json.JSONObject(migration), new Library(context), PodcastStore.get(context));
+    assertTrue(new Library(context).playlists.stream().anyMatch(p -> p.name.equals(expectedPlaylist)));
     // Offline fixtures are written only to the disposable test installation.
     MusicCatalog.Home home = new MusicCatalog.Home();
     java.nio.file.Files.write(new File(context.getFilesDir(), "discovery.json").toPath(), MusicCatalog.serialize(home).getBytes(StandardCharsets.UTF_8));
