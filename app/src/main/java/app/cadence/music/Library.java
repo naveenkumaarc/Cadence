@@ -16,8 +16,10 @@ import org.json.JSONObject;
 final class Library {
   final List<Playlist> playlists = new ArrayList<>();
   private final AtomicFile file;
+  private final Context context;
 
   Library(Context context) throws Exception {
+    this.context=context.getApplicationContext();
     file = new AtomicFile(new File(context.getFilesDir(), "library.json"));
     if (file.getBaseFile().exists()) {
       JSONArray data = new JSONArray(new String(file.readFully(), StandardCharsets.UTF_8));
@@ -56,6 +58,7 @@ final class Library {
       stream = file.startWrite();
       stream.write(all.toString().getBytes(StandardCharsets.UTF_8));
       file.finishWrite(stream);
+      CloudSync.changed(context);
     } catch (IOException e) {
       if (stream != null) file.failWrite(stream);
       throw e;

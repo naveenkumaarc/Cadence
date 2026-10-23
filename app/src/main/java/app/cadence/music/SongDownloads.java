@@ -50,6 +50,11 @@ final class SongDownloads {
         entries.put(key(entry.track.sourceUrl), entry);
       }
     }
+    if(!context.getSharedPreferences("download-migration",0).getBoolean("songs",false)) {
+      JSONObject wishes=DownloadList.snapshot(context);
+      for(Entry entry:entries.values()) if(entry.track.sourceUrl.startsWith("https://")) wishes.put(DownloadList.id(entry.track),Library.encode(entry.track));
+      DownloadList.replace(context,wishes); context.getSharedPreferences("download-migration",0).edit().putBoolean("songs",true).commit();
+    }
   }
 
   static String key(String source) {
@@ -105,7 +110,11 @@ final class SongDownloads {
   }
   synchronized Library.Playlist playlist() {
     Library.Playlist playlist = new Library.Playlist("Downloaded"); playlist.id = PLAYLIST_ID;
-    playlist.tracks.addAll(tracks()); return playlist;
+    try {
+      JSONObject wanted=DownloadList.snapshot(context);
+      for(Track track:tracks()) if(wanted.has(DownloadList.id(track))) playlist.tracks.add(track);
+    } catch(Exception ignored) { playlist.tracks.addAll(tracks()); }
+    return playlist;
   }
 
   void start(Track track) throws Exception {
@@ -122,6 +131,7 @@ final class SongDownloads {
     Uri uri = Uri.parse(address);
     if (!"https".equals(uri.getScheme()) || uri.getHost() == null) throw new IOException("A secure audio address is required.");
     State state = state(track); if (state.complete || state.active) return;
+    DownloadList.remember(context,track);
     String key = key(track.sourceUrl); Entry old = entries.get(key);
     if (old != null) { manager().remove(old.job); File previous = file(old); if (previous != null && previous.exists() && !previous.delete()) throw new IOException("Cannot replace the old download."); }
     Entry entry = new Entry(); entry.track = Library.decode(Library.encode(track));
@@ -142,6 +152,9 @@ final class SongDownloads {
   }
 
   synchronized void remove(Track track) throws Exception {
+    cancelTransfer(track); DownloadList.forget(context,track);
+  }
+  synchronized void cancelTransfer(Track track) throws Exception {
     String key = key(track.sourceUrl); Entry entry = entries.get(key); if (entry == null) return;
     manager().remove(entry.job);
     File target = file(entry);

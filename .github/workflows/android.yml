@@ -48,7 +48,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Cadence-2.0.1-api-${{ matrix.api }}
+          name: Cadence-2.1-api-${{ matrix.api }}
           retention-days: 7
           path: |
             app/build/outputs/apk/

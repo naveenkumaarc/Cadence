@@ -40,6 +40,11 @@ public class SongDownloadsIntegrationTest {
     TextView view = text(activity.getWindow().getDecorView(), title); assertNotNull(view);
     ((View)view.getParent().getParent()).performClick();
   }
+  private View offlineBadge(View view) {
+    if(view instanceof DownloadBadge && view.getContentDescription()!=null && view.getContentDescription().toString().startsWith("Available offline:")) return view;
+    if(view instanceof ViewGroup group) for(int i=0;i<group.getChildCount();i++) { View found=offlineBadge(group.getChildAt(i));if(found!=null) return found; }
+    return null;
+  }
 
   @Test public void downloadedSongPersistsShowsAcrossPlaylistsAndDecodesWithoutRemoteSource() throws Exception {
     if (android.os.Build.VERSION.SDK_INT >= 33)
@@ -75,9 +80,9 @@ public class SongDownloadsIntegrationTest {
       main(() -> {
         call(screen,"showLibrary"); tapRow(screen,"Downloaded");
         assertNotNull(text(screen.getWindow().getDecorView(),"Offline fixture"));
-        assertNotNull(text(screen.getWindow().getDecorView(),"✓"));
+        assertNotNull(offlineBadge(screen.getWindow().getDecorView()));
         call(screen,"showLibrary"); tapRow(screen,"Imported duration test");
-        TextView badge = text(screen.getWindow().getDecorView(),"✓"); assertNotNull(badge);
+        View badge = offlineBadge(screen.getWindow().getDecorView()); assertNotNull(badge);
         assertTrue(badge.getContentDescription().toString().startsWith("Available offline:"));
         tapRow(screen,"Imported title");
       });
@@ -92,7 +97,7 @@ public class SongDownloadsIntegrationTest {
       downloads.remove(song);
       assertNull(new SongDownloads(context).localUri(song.sourceUrl));
       assertEquals(song.sourceUrl,new Library(context).playlists.stream().filter(p -> p.id.equals("offline-csv")).findFirst().orElseThrow().tracks.get(0).sourceUrl);
-      main(() -> {call(screen,"refreshSongDownloads");assertNull(text(screen.getWindow().getDecorView(),"✓"));});
+      main(() -> {call(screen,"refreshSongDownloads");assertNull(offlineBadge(screen.getWindow().getDecorView()));});
     } finally {
       MainActivity screen=activity;
       if(screen!=null) main(() -> {if(controller[0]!=null && controller[0].isConnected()){controller[0].pause();controller[0].clearMediaItems();}screen.finish();});

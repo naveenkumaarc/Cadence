@@ -14,8 +14,10 @@ android {
         applicationId 'app.cadence.player'
         minSdk 26
         targetSdk 35
-        versionCode 6
-        versionName '2.0.1'
+        versionCode 7
+        versionName '2.1'
+        def googleClientId = providers.gradleProperty('cadenceGoogleClientId').orElse('823603474331-q4ng1jpvtftt9bjpadfei0go1d6ipeej.apps.googleusercontent.com').get()
+        buildConfigField 'String', 'GOOGLE_WEB_CLIENT_ID', '"' + googleClientId.replace('"', '') + '"'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     signingConfigs {
@@ -37,10 +39,17 @@ android {
         targetCompatibility JavaVersion.VERSION_17
         coreLibraryDesugaringEnabled true
     }
+    buildFeatures { buildConfig true }
     packaging { resources.excludes += ['META-INF/DEPENDENCIES', 'META-INF/INDEX.LIST'] }
     lint { abortOnError true }
 }
 dependencies {
+    implementation 'com.google.code.gson:gson:2.11.0'
+    implementation 'androidx.credentials:credentials:1.5.0'
+    implementation 'androidx.credentials:credentials-play-services-auth:1.5.0'
+    implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
+    implementation 'com.google.android.gms:play-services-auth:21.4.0'
+    implementation 'androidx.work:work-runtime:2.10.1'
     implementation project(':core')
     implementation 'androidx.core:core:1.15.0'
     implementation 'androidx.media3:media3-exoplayer:1.8.0'

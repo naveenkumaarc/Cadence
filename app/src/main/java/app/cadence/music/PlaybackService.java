@@ -714,6 +714,7 @@ public final class PlaybackService extends MediaLibraryService {
               out = savedQueue.startWrite();
               out.write(bytes);
               savedQueue.finishWrite(out);
+              CloudSync.progressChanged(this);
             } catch (Exception e) {
               if (out != null) savedQueue.failWrite(out);
             }

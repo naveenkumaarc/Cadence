@@ -66,13 +66,20 @@ public final class MainActivity extends Activity {
   private final ExecutorService discoveryWorkers = Executors.newFixedThreadPool(2);
   private LinearLayout root, body, mini;
   private TextView status, miniTitle, miniArtist;
-  private Artwork miniArt;
+  private Artwork miniArt, headerPhoto;
+  private GoogleLogin googleLogin;
+  private TextView syncStatus;
+  private Button playlistDownload;
+  private final java.util.Map<String, TransportButton> episodePlayButtons = new java.util.HashMap<>();
+  private final java.util.Map<String, TextView> episodeProgress = new java.util.HashMap<>();
+  private final java.util.Map<String, ProgressBar> episodeBars = new java.util.HashMap<>();
+  private final java.util.Map<String, Podcasts.Episode> displayedEpisodes = new java.util.HashMap<>();
   private TransportButton miniPlay;
   private Library library;
   private SearchHistory searchHistory;
   private PodcastStore podcasts;
   private SongDownloads songDownloads;
-  private final java.util.Map<TextView, Track> songBadges = new java.util.LinkedHashMap<>();
+  private final java.util.Map<DownloadBadge, Track> songBadges = new java.util.LinkedHashMap<>();
   private final java.util.Map<TextView, Track> songTimes = new java.util.LinkedHashMap<>();
   private final java.util.Set<String> durationRequests = new java.util.HashSet<>();
   private final java.util.Map<String, Long> knownDurations = new java.util.HashMap<>();
@@ -158,6 +165,8 @@ public final class MainActivity extends Activity {
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     Artwork.configure(this);
+    googleLogin = new GoogleLogin(this, message -> new AlertDialog.Builder(this).setTitle("Google connection").setMessage(message).setPositiveButton("OK",null).show(), () -> { refreshProfilePhoto(); showProfile(); });
+    CloudSync.onApplied = this::cloudApplied;
     try {
       library = new Library(this);
       searchHistory = new SearchHistory(this);
@@ -230,6 +239,7 @@ public final class MainActivity extends Activity {
           }
         },
         this::runOnUiThread);
+    CloudSync.opened(this);
     ui.post(ticker);
   }
 
@@ -247,6 +257,8 @@ public final class MainActivity extends Activity {
   @Override
   protected void onDestroy() {
     destroyed = true;
+    CloudSync.onApplied = null;
+    if (googleLogin != null) googleLogin.close();
     ui.removeCallbacksAndMessages(null);
     if (playerDialog != null) playerDialog.dismiss();
     if (queueDialog != null) queueDialog.dismiss();
@@ -304,7 +316,14 @@ public final class MainActivity extends Activity {
     brand.setPadding(0, 0, 0, 0);
     brand.setGravity(Gravity.CENTER_VERTICAL);
     brand.setIncludeFontPadding(false);
-    header.addView(brand, new LinearLayout.LayoutParams(0, dp(48), 1));
+    header.addView(brand, new LinearLayout.LayoutParams(-2, dp(48)));
+    android.widget.FrameLayout profileTouch = new android.widget.FrameLayout(this);
+    profileTouch.setContentDescription("Open your profile"); profileTouch.setFocusable(true);
+    profileTouch.setBackground(ripple(Color.TRANSPARENT,24)); profileTouch.setOnClickListener(v -> showProfile());
+    headerPhoto = new Artwork(this); headerPhoto.circle(); headerPhoto.setContentDescription("Profile photo");
+    android.widget.FrameLayout.LayoutParams avatarSize = new android.widget.FrameLayout.LayoutParams(dp(30),dp(30),Gravity.CENTER);
+    profileTouch.addView(headerPhoto,avatarSize); header.addView(profileTouch,new LinearLayout.LayoutParams(dp(48),dp(48)));
+    header.addView(new View(this),new LinearLayout.LayoutParams(0,1,1)); refreshProfilePhoto();
     header.addView(
         icon("queue", "Open queue", this::showQueue),
         new LinearLayout.LayoutParams(dp(48), dp(48)));
@@ -402,6 +421,8 @@ public final class MainActivity extends Activity {
   private void clear(String name, String subtitle) {
     page = name;
     songBadges.clear(); songTimes.clear();
+    episodePlayButtons.clear(); episodeProgress.clear(); episodeBars.clear(); displayedEpisodes.clear();
+    playlistDownload = null; syncStatus = null;
     body.removeAllViews();
     String selected =
         name.equals("Playlist")
@@ -899,6 +920,7 @@ public final class MainActivity extends Activity {
     body.addView(button("Import from file", false, this::showImport));
     gap(18);
     playlistCard(songDownloads.playlist());
+    try { Library.Playlist saved = DownloadList.playlist(this); if(!saved.tracks.isEmpty()) playlistCard(saved); } catch(Exception ignored) {}
     for (Library.Playlist playlist : library.playlists) playlistCard(playlist);
   }
 
@@ -926,7 +948,7 @@ public final class MainActivity extends Activity {
     card.setOnClickListener(v -> showPlaylist(playlist));
     card.setOnLongClickListener(
         v -> {
-          if (!playlist.id.equals("favourites") && !playlist.id.equals(SongDownloads.PLAYLIST_ID))
+          if (!playlist.id.equals("favourites") && !playlist.id.equals(SongDownloads.PLAYLIST_ID) && !playlist.id.equals(DownloadList.PLAYLIST_ID))
             new AlertDialog.Builder(this)
                 .setTitle(playlist.name)
                 .setItems(
@@ -963,7 +985,7 @@ public final class MainActivity extends Activity {
   }
 
   private void showPlaylist(Library.Playlist requested) {
-    Library.Playlist playlist = requested.id.equals(SongDownloads.PLAYLIST_ID) ? songDownloads.playlist() : requested;
+    Library.Playlist playlist = resolvePlaylist(requested);
     shownPlaylist = playlist;
     clear("Playlist", playlist.origin.isEmpty() ? "Your collection" : "Imported playlist");
     body.addView(text(playlist.name, 32, INK, true));
@@ -989,12 +1011,22 @@ public final class MainActivity extends Activity {
     playActions.addView(button("Play all", true, () -> playPlaylist(displayed.tracks, false)), new LinearLayout.LayoutParams(0, dp(50), 1));
     playActions.addView(button("Shuffle play", false, () -> playPlaylist(displayed.tracks, true)), new LinearLayout.LayoutParams(0, dp(50), 1));
     body.addView(playActions);
+    gap(10);
+    playlistDownload=button("Download all",false,()->playlistDownloadAction(displayed));
+    playlistDownload.setContentDescription("Download all songs in " + displayed.name);
+    body.addView(playlistDownload,new LinearLayout.LayoutParams(-1,dp(48))); refreshPlaylistDownload();
     gap(18);
     appendPlaylistTracks(playlist, 0);
     if (playlist.tracks.isEmpty())
       body.addView(text(playlist.id.equals(SongDownloads.PLAYLIST_ID)
           ? "Choose Download song from a song’s options. Completed songs appear here for offline listening."
           : "Save songs here from search, or import a playlist.", 14, MUTED, false));
+  }
+
+  private Library.Playlist resolvePlaylist(Library.Playlist requested) {
+    if(requested.id.equals(SongDownloads.PLAYLIST_ID)) return songDownloads.playlist();
+    if(requested.id.equals(DownloadList.PLAYLIST_ID)) try { return DownloadList.playlist(this); } catch(Exception ignored) {}
+    return requested;
   }
 
   private void appendCollectionTracks(List<Track> tracks,int offset) {
@@ -1038,8 +1070,8 @@ public final class MainActivity extends Activity {
     labels.addView(artist);
     row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
     if (!track.podcast && !track.sourceUrl.isEmpty()) {
-      TextView badge = text("", 15, Color.rgb(91, 215, 154), true);
-      badge.setGravity(Gravity.CENTER); badge.setContentDescription("Download song " + track.title);
+      DownloadBadge badge = new DownloadBadge(this);
+      badge.setContentDescription("Download song " + track.title);
       badge.setOnClickListener(v -> songDownloadAction(track, playlist));
       row.addView(badge, new LinearLayout.LayoutParams(dp(32), dp(48)));
       songBadges.put(badge, track); updateSongBadge(badge, track);
@@ -1080,7 +1112,8 @@ public final class MainActivity extends Activity {
       SongDownloads.State state = songDownloads.state(track);
       options.add(state.complete ? "Remove download" : state.active ? "Cancel download" : "Download song");
     }
-    if (playlist != null && !playlist.id.equals(SongDownloads.PLAYLIST_ID)) options.add("Remove from this playlist");
+    if (playlist != null && !playlist.id.equals(SongDownloads.PLAYLIST_ID) && !playlist.id.equals(DownloadList.PLAYLIST_ID)) options.add("Remove from this playlist");
+    if (playlist != null && playlist.id.equals(DownloadList.PLAYLIST_ID)) options.add("Remove from saved downloads");
     new AlertDialog.Builder(this)
         .setTitle(track.title)
         .setItems(
@@ -1088,6 +1121,7 @@ public final class MainActivity extends Activity {
             (d, n) -> {
               switch (options.get(n)) {
                 case "Save to playlist" -> choosePlaylist(track);
+                case "Remove from saved downloads" -> { try { DownloadList.forget(this,track); showLibrary(); } catch(Exception e) { error("Saved downloads",e); } }
                 case "Add to favourites" -> {
                   add(
                       library.playlists.stream()
@@ -1292,7 +1326,9 @@ public final class MainActivity extends Activity {
   @Override
   protected void onActivityResult(int request, int result, Intent data) {
     super.onActivityResult(request, result, data);
+    if(request==60) { googleLogin.authorizationResult(result,data); return; }
     if (result != RESULT_OK || data == null) return;
+    if(request==61 && data.getData()!=null) { saveProfilePhoto(data.getData()); return; }
     if ((request == 14 || request == 15) && data.getData() != null) {
       Uri uri = data.getData();
       if (request == 14) {
@@ -1482,6 +1518,7 @@ public final class MainActivity extends Activity {
   }
 
   private void updatePlayer() {
+    refreshEpisodeControls(); refreshProfileStatus();
     if (controller == null || miniTitle == null) return;
     MediaItem item = controller.getCurrentMediaItem();
     Track playingTrack = currentTrack();
@@ -2187,29 +2224,24 @@ public final class MainActivity extends Activity {
     top.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
     top.setOnClickListener(v -> playEpisode(e));
     box.addView(top);
-    long position = podcasts.progress(e.id);
-    String detail =
-        podcasts.completed(e.id)
-            ? "Played"
-            : position > 0
-                ? "Resume · " + elapsed(position / 1000)
-                : e.duration > 0 ? duration(e.duration) : "Episode";
-    TextView meta = text(detail, 12, position > 0 ? accent : MUTED, false);
-    meta.setPadding(0, dp(10), 0, 0);
-    box.addView(meta);
-    if (position > 0 && e.duration > 0) {
-      ProgressBar bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-      bar.setMax(1000);
-      bar.setProgress((int) Math.min(1000, position / e.duration));
-      bar.setProgressTintList(ColorStateList.valueOf(accent));
-      LinearLayout.LayoutParams barSize = new LinearLayout.LayoutParams(-1, dp(4));
-      barSize.setMargins(0, dp(10), 0, dp(12)); box.addView(bar, barSize);
-    }
-    LinearLayout controls = row();
-    controls.setPadding(0, dp(12), 0, dp(4));
-    controls.addView(
-        button(position > 0 ? "Resume" : "Play", true, () -> playEpisode(e)),
-        new LinearLayout.LayoutParams(dp(96), dp(42)));
+    displayedEpisodes.put(e.id,e);
+    TextView meta = text("",12,accent,false); meta.setPadding(0,dp(10),0,0);
+    episodeProgress.put(e.id,meta); box.addView(meta);
+    ProgressBar bar = new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
+    bar.setMax(1000); bar.setProgressTintList(ColorStateList.valueOf(accent));
+    LinearLayout.LayoutParams barSize = new LinearLayout.LayoutParams(-1,dp(4)); barSize.setMargins(0,dp(10),0,dp(4));
+    box.addView(bar,barSize); episodeBars.put(e.id,bar);
+    LinearLayout controls=row(); controls.setPadding(0,dp(12),0,dp(4));
+    TransportButton episodePlay=new TransportButton(this,TransportButton.Icon.PLAY,BG,accent,"Play "+e.title);
+    episodePlay.setOnClickListener(v -> {
+      Track active=currentTrack();
+      if(active!=null && active.podcast && active.episodeId.equals(e.id)) togglePlay();
+      else playEpisode(e);
+      refreshEpisodeControls();
+    });
+    episodePlayButtons.put(e.id,episodePlay);
+    LinearLayout.LayoutParams playSize=new LinearLayout.LayoutParams(dp(48),dp(48));playSize.setMargins(0,0,dp(12),0);
+    controls.addView(episodePlay,playSize);
     Button download = button(podcasts.download(e.id).label, false, () -> downloadAction(e));
     download.setTextSize(12);
     downloadButtons.put(e.id, download);
@@ -2240,7 +2272,7 @@ public final class MainActivity extends Activity {
                     .show()),
         new LinearLayout.LayoutParams(dp(44), dp(44)));
     box.addView(controls);
-    body.addView(box);
+    body.addView(box); refreshEpisodeControls();
     View line = new View(this);
     line.setBackgroundColor(CARD);
     body.addView(line, new LinearLayout.LayoutParams(-1, dp(1)));
@@ -2267,6 +2299,7 @@ public final class MainActivity extends Activity {
                 } else
                   try {
                     podcasts.deleteDownload(e.id);
+                    DownloadList.forget(this,e.track());
                     refreshDownloadButtons();
                   } catch (Exception failure) {
                     error("Removing download", failure);
@@ -2276,6 +2309,7 @@ public final class MainActivity extends Activity {
     } else
       try {
         podcasts.startDownload(e);
+        DownloadList.remember(this,e.track());
         toast("Download started");
         refreshDownloadButtons();
       } catch (Exception failure) {
@@ -2287,12 +2321,12 @@ public final class MainActivity extends Activity {
     if (podcasts == null) return;
     for (var kv : downloadButtons.entrySet())
       kv.getValue().setText(podcasts.download(kv.getKey()).label);
-    refreshSongDownloads();
+    refreshSongDownloads(); refreshPlaylistDownload();
   }
 
-  private void updateSongBadge(TextView badge, Track track) {
+  private void updateSongBadge(DownloadBadge badge, Track track) {
     SongDownloads.State state = songDownloads.state(track);
-    badge.setText(state.complete ? "✓" : state.active ? "↓" : "");
+    badge.state(state.complete,state.active);
     badge.setContentDescription(state.complete ? "Available offline: " + track.title
         : state.active ? state.label + ": " + track.title : "Download song " + track.title);
   }
@@ -2614,6 +2648,8 @@ public final class MainActivity extends Activity {
     clear("Settings", "");
     body.addView(text("Settings", 32, INK, true)); gap(6);
     body.addView(text("Make Cadence feel like you.", 15, MUTED, false)); gap(24);
+    LinearLayout account = settingsGroup("Profile & sync");
+    settingRow(account,"info",profileName(),CloudSync.subject(this).isEmpty()?"Optional Google sign-in · Save your library online":CloudSync.prefs(this).getString("email",""),this::showProfile);
     LinearLayout discovery = settingsGroup("Discovery");
     settingRow(discovery, "language", "Languages", String.join(", ", Preferences.languages(this)), this::chooseLanguages);
     LinearLayout playback = settingsGroup("Playback");
@@ -2648,7 +2684,7 @@ public final class MainActivity extends Activity {
     LinearLayout about = settingsGroup("About");
     settingRow(about, "info", "Playback diagnostics", "Connection, queue & playback details", this::diagnostics);
     gap(4);
-    TextView version = text("Cadence 2.0.1", 13, MUTED, false); version.setGravity(Gravity.CENTER); body.addView(version);
+    TextView version = text("Cadence 2.1", 13, MUTED, false); version.setGravity(Gravity.CENTER); body.addView(version);
   }
 
   private LinearLayout settingsGroup(String title) {
@@ -2712,7 +2748,7 @@ public final class MainActivity extends Activity {
 
   private void diagnostics() {
     String report =
-        "Cadence 2.0.1\nAndroid "
+        "Cadence 2.1\nAndroid "
             + Build.VERSION.RELEASE
             + " · "
             + Build.MANUFACTURER
@@ -2809,9 +2845,214 @@ public final class MainActivity extends Activity {
   private void save() {
     try {
       library.save();
+      CloudSync.changed(this);
     } catch (Exception e) {
       error("Saving library", e);
     }
+  }
+
+  private void refreshEpisodeControls() {
+    if(podcasts==null) return;
+    Track active=currentTrack();
+    for(var row:displayedEpisodes.entrySet()) {
+      String id=row.getKey(); Podcasts.Episode episode=row.getValue();
+      boolean current=active!=null && active.podcast && active.episodeId.equals(id);
+      long position=current && controller!=null?Math.max(0,controller.getCurrentPosition()):podcasts.progress(id);
+      long length=episode.duration;
+      if(current && controller!=null && controller.getDuration()>0) length=controller.getDuration()/1000;
+      TextView label=episodeProgress.get(id); boolean done=podcasts.completed(id);
+      if(label!=null) label.setText(done && !current?"Played":episodeProgressLabel(position,length));
+      ProgressBar bar=episodeBars.get(id);
+      if(bar!=null) { bar.setVisibility(length>0?View.VISIBLE:View.GONE); bar.setProgress(done && !current?1000:(int)Math.min(1000,position/Math.max(1,length))); }
+      TransportButton button=episodePlayButtons.get(id);
+      if(button!=null) {
+        boolean playing=current && controller!=null && controller.getPlayWhenReady() && controller.getPlaybackState()!=Player.STATE_ENDED && controller.getPlayerError()==null;
+        button.icon(playing?TransportButton.Icon.PAUSE:TransportButton.Icon.PLAY);
+        button.setContentDescription((playing?"Pause ":position>0?"Resume ":"Play ")+episode.title);
+      }
+    }
+  }
+
+  static String episodeProgressLabel(long milliseconds,long seconds) {
+    long played=Math.max(0,milliseconds)/1000;
+    if(seconds>0) played=Math.min(played,seconds);
+    String heard=played>=60?(played/60)+" min played":played>0?played+" sec played":"Not started";
+    if(seconds<=0) return heard;
+    long remaining=Math.max(0,seconds-played);
+    return heard+" · "+(remaining>=60?(long)Math.ceil(remaining/60d)+" min":remaining+" sec")+" remaining";
+  }
+
+  private void playlistDownloadAction(Library.Playlist playlist) {
+    try {
+      PlaylistDownloads.Summary state=PlaylistDownloads.summary(this,playlist.id);
+      if(state.active()>0) {
+        new AlertDialog.Builder(this).setTitle("Cancel remaining downloads?").setMessage("Completed downloads will be kept. Your saved download list stays available for retry.")
+            .setNegativeButton("Keep downloading",null).setPositiveButton("Cancel remaining",(d,n)-> {
+              try { PlaylistDownloads.cancel(this,playlist.id); refreshPlaylistDownload(); refreshSongDownloads(); } catch(Exception e) { error("Downloads",e); }
+            }).show(); return;
+      }
+      int unmatched=PlaylistDownloads.enqueue(this,playlist);
+      toast(unmatched>0?"Downloads queued · "+unmatched+" songs need matching":"Downloads queued · completed songs are skipped");
+      refreshPlaylistDownload();
+    } catch(Exception e) { error("Playlist downloads",e); }
+  }
+
+  private void refreshPlaylistDownload() {
+    if(playlistDownload==null || shownPlaylist==null || !page.equals("Playlist")) return;
+    try { PlaylistDownloads.Summary state=PlaylistDownloads.summary(this,shownPlaylist.id); playlistDownload.setText(state.label()); }
+    catch(Exception ignored) {}
+  }
+
+  private org.json.JSONObject profileData() {
+    try { return JsonDisk.read(this,"cloud-profile.json"); } catch(Exception ignored) { return new org.json.JSONObject(); }
+  }
+  private String profileName() {
+    String custom=profileData().optString("name");
+    if(!custom.isBlank()) return custom;
+    String google=CloudSync.prefs(this).getString("googleName",""); return google.isBlank()?"Your profile":google;
+  }
+  private void refreshProfilePhoto() {
+    if(headerPhoto!=null) loadProfilePhoto(headerPhoto);
+  }
+  private void loadProfilePhoto(Artwork view) {
+    String photo=profileData().optString("photo");
+    if(!photo.isEmpty()) try {
+      byte[] bytes=android.util.Base64.decode(photo,android.util.Base64.DEFAULT);
+      android.graphics.Bitmap image=android.graphics.BitmapFactory.decodeByteArray(bytes,0,bytes.length);
+      view.load(""); view.setImageBitmap(image); return;
+    } catch(Exception ignored) {}
+    view.load(CloudSync.prefs(this).getString("googlePhoto",""));
+  }
+  private void showProfile() {
+    clear("Profile",""); body.addView(text("Your profile",32,INK,true)); gap(20);
+    LinearLayout identity=row(); identity.setPadding(0,dp(8),0,dp(16));
+    Artwork photo=new Artwork(this); photo.circle(); photo.setContentDescription("Change profile photo"); loadProfilePhoto(photo);
+    photo.setOnClickListener(v->chooseProfilePhoto()); identity.addView(photo,new LinearLayout.LayoutParams(dp(72),dp(72)));
+    LinearLayout labels=column(); labels.setPadding(dp(16),0,0,0); labels.addView(text(profileName(),23,INK,true));
+    labels.addView(text(CloudSync.prefs(this).getString("email","Saved on this phone"),13,MUTED,false));
+    identity.addView(labels,new LinearLayout.LayoutParams(0,-2,1)); body.addView(identity); gap(8);
+    LinearLayout edit=settingsGroup("Make it yours");
+    settingRow(edit,"info","Display name","Your Cadence name",()->ask("Display name","Your name",profileName(),name->{
+      if(name.length()>100) { toast("Use a name up to 100 characters."); return; }
+      try { org.json.JSONObject data=profileData().put("name",name); JsonDisk.write(this,"cloud-profile.json",data); CloudSync.changed(this); showProfile(); }
+      catch(Exception e) { error("Profile",e); }
+    }));
+    settingDivider(edit); settingRow(edit,"palette","Profile photo","Choose a photo from your phone",this::chooseProfilePhoto);
+    if(!CloudSync.subject(this).isEmpty()) {
+      settingDivider(edit); settingRow(edit,"restore","Use Google name and photo","Reset your Cadence customisations",()-> {
+        try { JsonDisk.write(this,"cloud-profile.json",new org.json.JSONObject()); CloudSync.changed(this); refreshProfilePhoto(); showProfile(); }
+        catch(Exception e) { error("Profile",e); }
+      });
+    }
+    if(CloudSync.subject(this).isEmpty()) {
+      body.addView(text("Keep your playlists, podcast progress and saved downloads with you. Google sign-in is optional.",15,MUTED,false)); gap(16);
+      com.google.android.gms.common.SignInButton signIn=new com.google.android.gms.common.SignInButton(this);
+      signIn.setSize(com.google.android.gms.common.SignInButton.SIZE_WIDE); signIn.setColorScheme(com.google.android.gms.common.SignInButton.COLOR_DARK);
+      signIn.setOnClickListener(v->googleLogin.signIn(this::acceptGoogleProfile)); body.addView(signIn,new LinearLayout.LayoutParams(-1,dp(52)));
+    } else {
+      LinearLayout cloud=settingsGroup("Google Drive sync");
+      syncStatus=text("",13,MUTED,false); syncStatus.setPadding(dp(16),dp(12),dp(16),dp(12)); cloud.addView(syncStatus); refreshProfileStatus();
+      boolean connected=CloudSync.enabled(this);
+      settingRow(cloud,"backup",connected?"Sync now":"Connect Google Drive","Hidden Cadence app storage",()-> {
+        if(!CloudSync.enabled(this) || CloudSync.prefs(this).getBoolean("needsConsent",false)) googleLogin.connectDrive();
+        else { CloudSync.schedule(this); toast("Sync requested"); }
+      });
+      settingDivider(cloud);
+      LinearLayout auto=settingRow(cloud,"restore","Automatic sync","Changes sync when connected",null);
+      android.widget.Switch enabled=new android.widget.Switch(this); enabled.setContentDescription("Automatic Drive sync"); enabled.setChecked(CloudSync.automatic(this));
+      enabled.setOnCheckedChangeListener((v,value)-> {
+        CloudSync.prefs(this).edit().putBoolean("auto",value).apply();
+        if(value) googleLogin.connectDrive();
+        else { CloudSync.prefs(this).edit().putString("status","Automatic sync paused · Sync now is available").apply();
+          androidx.work.WorkManager.getInstance(this).cancelUniqueWork("cadence-cloud-periodic"); }
+      }); auto.addView(enabled,new LinearLayout.LayoutParams(dp(52),dp(48)));
+      settingDivider(cloud); settingRow(cloud,"restore","Recovery copies","Restore an earlier synced library",this::cloudRecovery);
+      settingDivider(cloud); settingRow(cloud,"play","Continue listening","Resume the queue saved in Drive",this::resumeCloudQueue);
+      settingDivider(cloud); settingRow(cloud,"close","Sign out","Keep the current library on this phone",()->new AlertDialog.Builder(this).setTitle("Sign out of Google?")
+          .setMessage("Sync will stop. Your current library remains on this phone.").setNegativeButton("Cancel",null).setPositiveButton("Sign out",(d,n)-> {
+            try { CloudSync.signOut(this); googleLogin.clear(); refreshProfilePhoto(); showProfile(); } catch(Exception e) { error("Sign out",e); }
+          }).show());
+    }
+    gap(16); body.addView(text("Sync stores library information, your Cadence profile and download requests in your Google Drive. Audio files stay on each phone.",13,MUTED,false));
+    body.addView(button("Privacy policy",false,()->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/naveenkumaarc/Cadence/blob/main/PRIVACY.md")))));
+    refreshProfilePhoto();
+  }
+  private void acceptGoogleProfile(GoogleLogin.Profile profile) {
+    if(profile.subject().equals(CloudSync.subject(this))) { googleLogin.connectDrive(); return; }
+    new AlertDialog.Builder(this).setTitle("Use this Google account?").setMessage("Choose how to start with "+profile.email()+". Your current library will be kept in a recovery copy on this phone.")
+        .setNegativeButton("Cancel",null).setNeutralButton("Use cloud library",(d,n)->activateProfile(profile,false))
+        .setPositiveButton("Merge this library",(d,n)->activateProfile(profile,true)).show();
+  }
+  private void activateProfile(GoogleLogin.Profile profile,boolean merge) {
+    try { CloudSync.activate(this,profile.subject(),profile.email(),profile.name(),profile.photo(),merge); refreshProfilePhoto(); showProfile(); googleLogin.connectDrive(); }
+    catch(Exception e) { error("Google profile",e); }
+  }
+  private void refreshProfileStatus() {
+    if(syncStatus==null || !page.equals("Profile")) return;
+    var prefs=CloudSync.prefs(this); String message=prefs.getString("status","Changes saved on this phone"); long last=prefs.getLong("lastSync",0);
+    if(last>0) message += "\nLast synced "+android.text.format.DateUtils.getRelativeTimeSpanString(last,System.currentTimeMillis(),android.text.format.DateUtils.MINUTE_IN_MILLIS);
+    syncStatus.setText(message);
+  }
+  private void chooseProfilePhoto() {
+    Intent pick=new Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE); startActivityForResult(pick,61);
+  }
+  private void saveProfilePhoto(Uri uri) {
+    work("Saving profile photo…",()-> {
+      android.graphics.BitmapFactory.Options options=new android.graphics.BitmapFactory.Options(); options.inJustDecodeBounds=true;
+      try(var input=getContentResolver().openInputStream(uri)) { android.graphics.BitmapFactory.decodeStream(input,null,options); }
+      if(options.outWidth<=0 || options.outHeight<=0) throw new java.io.IOException("Choose a supported image.");
+      options.inJustDecodeBounds=false; options.inSampleSize=1;
+      while(Math.max(options.outWidth,options.outHeight)/options.inSampleSize>512) options.inSampleSize*=2;
+      android.graphics.Bitmap bitmap;
+      try(var input=getContentResolver().openInputStream(uri)) { bitmap=android.graphics.BitmapFactory.decodeStream(input,null,options); }
+      if(bitmap==null) throw new java.io.IOException("This photo could not be read.");
+      int edge=Math.min(bitmap.getWidth(),bitmap.getHeight());
+      android.graphics.Bitmap crop=android.graphics.Bitmap.createBitmap(bitmap,(bitmap.getWidth()-edge)/2,(bitmap.getHeight()-edge)/2,edge,edge);
+      android.graphics.Bitmap scaled=android.graphics.Bitmap.createScaledBitmap(crop,256,256,true);
+      java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream(); scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG,85,bytes);
+      return android.util.Base64.encodeToString(bytes.toByteArray(),android.util.Base64.NO_WRAP);
+    },encoded->{try { JsonDisk.write(this,"cloud-profile.json",profileData().put("photo",encoded)); CloudSync.changed(this); refreshProfilePhoto(); showProfile(); } catch(Exception e) { error("Profile photo",e); }});
+  }
+  private void cloudApplied() {
+    if(destroyed || library==null) return;
+    try {
+      library=new Library(this); refreshProfilePhoto();
+      int scroll=body.getParent() instanceof ScrollView sv?sv.getScrollY():0;
+      if(page.equals("Library")) showLibrary();
+      else if(page.equals("Profile")) showProfile();
+      else if(page.equals("Playlist") && shownPlaylist!=null) {
+        Library.Playlist old=shownPlaylist;
+        Library.Playlist next=library.playlists.stream().filter(p->p.id.equals(old.id)).findFirst().orElse(old);
+        if(old.id.startsWith("cadence:")) showPlaylist(resolvePlaylist(old));
+        else if(library.playlists.stream().anyMatch(p->p.id.equals(old.id))) showPlaylist(next); else showLibrary();
+      } else if(page.equals("Show") && shownShow!=null) {
+        String feed=shownShow.feedUrl;
+        for(Podcasts.Show show:podcasts.knownShows()) if(show.feedUrl.equals(feed)) { showPodcast(show); break; }
+      }
+      if(body.getParent() instanceof ScrollView sv) sv.post(()->sv.scrollTo(0,scroll));
+    } catch(Exception e) { toast("Synced library saved. Reopen Cadence to refresh."); }
+  }
+  private void cloudRecovery() {
+    work("Reading recovery copies…",()->CloudSync.history(this),copies->{
+      if(copies.isEmpty()) { toast("No earlier cloud copies yet. Copies are kept as your library changes."); return; }
+      String[] labels=new String[copies.size()]; for(int i=0;i<labels.length;i++) labels[i]=copies.get(i).optString("modifiedTime").replace('T',' ').replace("Z","");
+      new AlertDialog.Builder(this).setTitle("Restore library from Drive").setItems(labels,(d,n)->new AlertDialog.Builder(this).setTitle("Restore this copy?")
+          .setMessage("This restores the selected library version. Your current local library is saved as a recovery copy first.")
+          .setNegativeButton("Cancel",null).setPositiveButton("Restore",(dialog,which)->work("Restoring library…",()-> { CloudSync.restore(this,copies.get(n).getString("id")); return true; },ignored->toast("Library restored"))).show()).show();
+    });
+  }
+  private void resumeCloudQueue() {
+    if(controller==null) { toast("Wait for the player to connect."); return; }
+    try {
+      org.json.JSONObject saved=JsonDisk.read(this,"cloud-resume.json"); org.json.JSONArray items=saved.optJSONArray("items");
+      if(items==null || items.length()==0) { toast("Sync first to retrieve your saved queue."); return; }
+      List<MediaItem> queue=new ArrayList<>(); int start=0;
+      for(int i=0;i<items.length();i++) { Track track=Library.decode(items.getJSONObject(i)); if(track.sourceUrl.startsWith("https://")) { if(i<=saved.optInt("index")) start=queue.size(); queue.add(mediaItem(track)); } }
+      if(queue.isEmpty()) { toast("This queue has no available online tracks."); return; }
+      controller.setMediaItems(queue,Math.min(start,queue.size()-1),Math.max(0,saved.optLong("position")));
+      controller.setShuffleModeEnabled(saved.optBoolean("shuffle")); int repeat=saved.optInt("repeat"); controller.setRepeatMode(repeat>=0 && repeat<=2?repeat:0);
+      controller.prepare(); controller.play(); openPlayer();
+    } catch(Exception e) { error("Saved queue",e); }
   }
 
   private void ask(String title, String hint, String value, Consumer<String> answer) {

@@ -90,6 +90,7 @@ final class PodcastStore {
     }
     previews.removeIf(s -> s.feedUrl.equals(show.feedUrl));
     save();
+    CloudSync.changed(context);
   }
 
   synchronized List<Podcasts.Show> subscriptions() { return new ArrayList<>(shows); }
@@ -100,7 +101,7 @@ final class PodcastStore {
   }
   synchronized void preview(Podcasts.Show show) throws Exception {
     if (subscribed(show.feedUrl)) return;
-    previews.removeIf(s -> s.feedUrl.equals(show.feedUrl)); previews.add(show); save();
+    previews.removeIf(s -> s.feedUrl.equals(show.feedUrl)); previews.add(show); save(); CloudSync.changed(context);
   }
   synchronized void remove(Podcasts.Show s) throws Exception {
     shows.removeIf(existing -> existing.feedUrl.equals(s.feedUrl)); preview(s); save();
@@ -191,6 +192,27 @@ final class PodcastStore {
         .putLong(episode, Math.max(0, position))
         .putBoolean(episode + ".done", complete)
         .apply();
+    CloudSync.progressChanged(context);
+  }
+
+  static List<Podcasts.Show> validateShows(JSONArray list) throws Exception {
+    if(list.length()>500) throw new IOException("Too many podcast feeds.");
+    List<Podcasts.Show> out=new ArrayList<>();
+    for(int i=0;i<list.length();i++) {
+      JSONObject j=list.getJSONObject(i); Podcasts.Show show=new Podcasts.Show();
+      show.feedUrl=Podcasts.https(j.getString("feed")); show.title=j.optString("title"); show.author=j.optString("author"); show.artwork=j.optString("artwork");
+      JSONArray episodes=j.optJSONArray("episodes"); if(episodes==null) episodes=new JSONArray();
+      if(episodes.length()>10000) throw new IOException("Too many podcast episodes.");
+      for(int k=0;k<episodes.length();k++) {
+        JSONObject e=episodes.getJSONObject(k); Podcasts.Episode ep=new Podcasts.Episode();
+        ep.id=e.getString("id"); ep.title=e.optString("title"); ep.show=show.title; ep.audioUrl=Podcasts.https(e.getString("audio"));
+        ep.artwork=e.optString("artwork",show.artwork); ep.duration=Math.max(0,e.optLong("duration")); ep.published=e.optString("published"); show.episodes.add(ep);
+      } out.add(show);
+    } return out;
+  }
+  synchronized void replaceCloud(JSONArray subscriptions, JSONArray cached) throws Exception {
+    List<Podcasts.Show> next=validateShows(subscriptions), other=validateShows(cached);
+    shows.clear(); shows.addAll(next); previews.clear(); previews.addAll(other); save();
   }
 
   static final class Download {
@@ -274,6 +296,7 @@ final class PodcastStore {
   }
 
   synchronized void startDownload(Podcasts.Episode e) throws Exception {
+    DownloadList.remember(context,e.track());
     Download state = download(e.id);
     if (state.complete || state.active) return;
     DownloadManager dm = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
