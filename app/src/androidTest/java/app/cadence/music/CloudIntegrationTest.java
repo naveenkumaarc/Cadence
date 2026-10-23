@@ -52,6 +52,22 @@ public final class CloudIntegrationTest {
       assertEquals(1,DownloadList.playlist(context).tracks.size());assertFalse(SongDownloads.get(context).state(track).complete);
     });
   }
+  @Test public void existingPodcastDownloadsBecomePortableRequestsOnlyOnce() {
+    checked(()-> {
+      PodcastStore store=PodcastStore.get(context);
+      Podcasts.Show show=new Podcasts.Show();show.title="Legacy downloads";show.feedUrl="https://example.com/legacy.xml";
+      Podcasts.Episode episode=new Podcasts.Episode();episode.id="legacy-download-episode";episode.title="Saved episode";episode.show=show.title;episode.audioUrl="https://example.com/saved.mp3";show.episodes.add(episode);store.put(show);
+      java.lang.reflect.Field field=PodcastStore.class.getDeclaredField("jobs");field.setAccessible(true);
+      @SuppressWarnings("unchecked") java.util.Map<String,Long> jobs=(java.util.Map<String,Long>)field.get(store);
+      var prefs=context.getSharedPreferences("download-migration",0);boolean previous=prefs.getBoolean("podcasts",false);
+      try {
+        jobs.put(episode.id,123456789L);prefs.edit().putBoolean("podcasts",false).commit();store.migrateDownloads();
+        assertTrue(DownloadList.snapshot(context).has(DownloadList.id(episode.track())));
+        DownloadList.forget(context,episode.track());store.migrateDownloads();
+        assertFalse("A deleted request must not return after migration",DownloadList.snapshot(context).has(DownloadList.id(episode.track())));
+      } finally { jobs.remove(episode.id);prefs.edit().putBoolean("podcasts",previous).commit(); }
+    });
+  }
   @Test public void episodeProgressAndProfileSurvivePortableRoundTrip() {
     checked(()-> {
       PodcastStore.get(context).progress("episode-3",20*60*1000,false);PodcastStore.get(context).progress("episode-4",45*60*1000,false);

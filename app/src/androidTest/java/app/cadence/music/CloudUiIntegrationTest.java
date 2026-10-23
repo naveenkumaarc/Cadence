@@ -43,6 +43,7 @@ public final class CloudUiIntegrationTest {
     try(InputStream input=instrumentation.getContext().getAssets().open("offline-fixture.wav");OutputStream output=new FileOutputStream(audio)) { byte[] bytes=new byte[8192];int count;while((count=input.read(bytes))!=-1)output.write(bytes,0,count); }
     Podcasts.Show show=new Podcasts.Show();show.title="Episode progress test";show.feedUrl="https://example.com/synthetic-feed.xml";
     for(int i=3;i<=4;i++) { Podcasts.Episode e=new Podcasts.Episode();e.id="ui-episode-"+i;e.title="Episode "+i;e.show=show.title;e.audioUrl="https://example.com/episode-"+i+".mp3";e.duration=3600;show.episodes.add(e); }
+    show.episodes.get(0).audioUrl=android.net.Uri.fromFile(audio).toString();
     try {
       main(()-> {
         PodcastStore.get(context).progress("ui-episode-3",1200000,false);PodcastStore.get(context).progress("ui-episode-4",2700000,false);
@@ -51,11 +52,9 @@ public final class CloudUiIntegrationTest {
         assertTrue(text(root,"20 min played · 40 min remaining"));assertTrue(text(root,"45 min played · 15 min remaining"));
         View play=described(root,"Resume Episode 3");assertTrue(play instanceof TransportButton);assertEquals(play.getLayoutParams().width,play.getLayoutParams().height);
         PodcastStore.get(context).progress("ui-episode-3",500,false);
-        Track track=new Track("Episode 3",show.title,android.net.Uri.fromFile(audio).toString(),"",3);track.podcast=true;track.episodeId="ui-episode-3";
-        Bundle extras=new Bundle();extras.putString("track",Library.encode(track).toString());
-        controller[0].setMediaItem(new MediaItem.Builder().setMediaId(track.sourceUrl).setUri(track.sourceUrl)
-            .setMediaMetadata(new MediaMetadata.Builder().setTitle(track.title).setArtist(track.artist).setExtras(extras).build()).build());
-        controller[0].prepare();controller[0].play();
+        play.performClick();
+        Field dialog=MainActivity.class.getDeclaredField("playerDialog");dialog.setAccessible(true);
+        assertTrue("The list play control should keep the episode list visible",dialog.get(activity)==null || !((android.app.Dialog)dialog.get(activity)).isShowing());
       });
       until(()->controller[0].isPlaying() && described(activity.getWindow().getDecorView(),"Pause Episode 3")!=null);
       main(()->described(activity.getWindow().getDecorView(),"Pause Episode 3").performClick());

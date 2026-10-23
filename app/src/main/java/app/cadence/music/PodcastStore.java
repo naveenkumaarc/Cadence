@@ -69,6 +69,18 @@ final class PodcastStore {
         String key = it.next();
         jobs.put(key, j.getLong(key));
       }
+    migrateDownloads();
+  }
+
+  synchronized void migrateDownloads() throws Exception {
+    var prefs=context.getSharedPreferences("download-migration",0);
+    if(prefs.getBoolean("podcasts",false)) return;
+    JSONObject wishes=DownloadList.snapshot(context);
+    for(Podcasts.Show show:knownShows()) for(Podcasts.Episode episode:show.episodes)
+      if(jobs.containsKey(episode.id) && episode.audioUrl.startsWith("https://")) {
+        Track track=episode.track();wishes.put(DownloadList.id(track),Library.encode(track));
+      }
+    DownloadList.replace(context,wishes);prefs.edit().putBoolean("podcasts",true).commit();
   }
 
   synchronized void put(Podcasts.Show show) throws Exception {

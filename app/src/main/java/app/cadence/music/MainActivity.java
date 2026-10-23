@@ -1465,6 +1465,7 @@ public final class MainActivity extends Activity {
   }
 
   private boolean radioStarting;
+  private boolean inlineEpisodePlayback;
   private void playRadio(Track track) {
     radioStarting = Preferences.get(this).getBoolean("autoplay", true);
     try { play(track, List.of(track)); } finally { radioStarting = false; }
@@ -1499,7 +1500,7 @@ public final class MainActivity extends Activity {
     controller.prepare();
     controller.play();
     status.setText("Loading " + track.title + "…");
-    openPlayer();
+    if(!inlineEpisodePlayback) openPlayer();
   }
 
   private void togglePlay() {
@@ -2236,7 +2237,7 @@ public final class MainActivity extends Activity {
     episodePlay.setOnClickListener(v -> {
       Track active=currentTrack();
       if(active!=null && active.podcast && active.episodeId.equals(e.id)) togglePlay();
-      else playEpisode(e);
+      else playEpisodeInline(e);
       refreshEpisodeControls();
     });
     episodePlayButtons.put(e.id,episodePlay);
@@ -2281,6 +2282,10 @@ public final class MainActivity extends Activity {
   private void playEpisode(Podcasts.Episode e) {
     Track t = podcasts.playable(e);
     play(t, List.of(t));
+  }
+  private void playEpisodeInline(Podcasts.Episode e) {
+    inlineEpisodePlayback=true;
+    try { playEpisode(e); } finally { inlineEpisodePlayback=false; }
   }
 
   private void downloadAction(Podcasts.Episode e) {
