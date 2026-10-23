@@ -705,6 +705,7 @@ public final class PlaybackService extends MediaLibraryService {
               .put("position", player.getCurrentPosition())
               .put("shuffle", player.getShuffleModeEnabled())
               .put("repeat", player.getRepeatMode())
+              .put("owner", CloudSync.prefs(this).getString("libraryOwner",""))
               .toString()
               .getBytes(java.nio.charset.StandardCharsets.UTF_8);
       disk.execute(

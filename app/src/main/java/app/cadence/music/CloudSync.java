@@ -130,22 +130,26 @@ final class CloudSync {
   }
   static void connected(Context c) { prefs(c).edit().putBoolean("enabled",true).putBoolean("needsConsent",false).apply(); periodic(c); schedule(c); }
   static void activate(Context c,String sub,String email,String name,String photo,boolean merge) throws Exception {
+    activate(c,sub,email,name,photo,merge,CloudData.localSnapshot(c));
+  }
+  static void activate(Context c,String sub,String email,String name,String photo,boolean merge,JSONObject current) throws Exception {
     applying=true;
     try {
-      String old=prefs(c).getString("libraryOwner",""); JSONObject current=CloudData.snapshot(c);
+      String old=prefs(c).getString("libraryOwner","");
       JsonDisk.write(c,"cloud-library-"+JsonDisk.hash(old.isEmpty()?"guest":old)+".json",current);
       JSONObject saved=JsonDisk.read(c,"cloud-library-"+JsonDisk.hash(sub)+".json");
       JSONObject use=saved.length()>0?saved:merge?current:new JSONObject();
       if(saved.length()==0 && !old.equals(sub)) { use.remove("profile/name"); use.remove("profile/photo"); }
+      if(use.has("_localQueue")) use.getJSONObject("_localQueue").put("owner",sub);
       prefs(c).edit().putString("subject",sub).putString("email",email).putString("googleName",name).putString("googlePhoto",photo)
           .putString("libraryOwner",sub).putBoolean("enabled",false).remove("lastSync").putString("status","Connect Drive to sync").commit();
-      CloudData.apply(c,use,false);
+      if(saved.length()>0 || merge) CloudData.applyLocal(c,use); else CloudData.apply(c,use,false);
       if(onApplied!=null) onApplied.run();
     } finally { applying=false; }
   }
   static void signOut(Context c) throws Exception {
     String owner=subject(c);
-    if(!owner.isEmpty()) JsonDisk.write(c,"cloud-library-"+JsonDisk.hash(owner)+".json",CloudData.snapshot(c));
+    if(!owner.isEmpty()) JsonDisk.write(c,"cloud-library-"+JsonDisk.hash(owner)+".json",CloudData.localSnapshot(c));
     prefs(c).edit().remove("subject").remove("email").remove("googleName").remove("googlePhoto").putBoolean("enabled",false).putString("status","Saved on this phone").commit();
     WorkManager.getInstance(c).cancelUniqueWork("cadence-cloud"); WorkManager.getInstance(c).cancelUniqueWork("cadence-cloud-periodic");
     if(pending!=null) MAIN.removeCallbacks(pending);

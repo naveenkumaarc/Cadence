@@ -2915,6 +2915,7 @@ public final class MainActivity extends Activity {
     if(headerPhoto!=null) loadProfilePhoto(headerPhoto);
   }
   private void loadProfilePhoto(Artwork view) {
+    view.reset();
     String photo=profileData().optString("photo");
     if(!photo.isEmpty()) try {
       byte[] bytes=android.util.Base64.decode(photo,android.util.Base64.DEFAULT);
@@ -2984,7 +2985,11 @@ public final class MainActivity extends Activity {
         .setPositiveButton("Merge this library",(d,n)->activateProfile(profile,true)).show();
   }
   private void activateProfile(GoogleLogin.Profile profile,boolean merge) {
-    try { CloudSync.activate(this,profile.subject(),profile.email(),profile.name(),profile.photo(),merge); refreshProfilePhoto(); showProfile(); googleLogin.connectDrive(); }
+    try {
+      org.json.JSONObject before=CloudData.localSnapshot(this);
+      String old=CloudSync.prefs(this).getString("libraryOwner","");
+      if(controller!=null && (!merge || !old.isEmpty() && !old.equals(profile.subject()))) { controller.pause(); controller.clearMediaItems(); }
+      CloudSync.activate(this,profile.subject(),profile.email(),profile.name(),profile.photo(),merge,before); refreshProfilePhoto(); showProfile(); googleLogin.connectDrive(); }
     catch(Exception e) { error("Google profile",e); }
   }
   private void refreshProfileStatus() {

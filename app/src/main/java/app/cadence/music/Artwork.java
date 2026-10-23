@@ -55,6 +55,7 @@ final class Artwork extends ImageView {
     requestLayout();
     invalidate();
   }
+  void reset() { source=""; setImageDrawable(null); invalidate(); }
 
   Artwork(Context context) {
     super(context);

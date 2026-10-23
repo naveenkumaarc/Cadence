@@ -45,7 +45,10 @@ final class CloudData {
     if(profile.has("name")) out.put("profile/name",profile.optString("name"));
     if(profile.has("photo")) out.put("profile/photo",profile.optString("photo"));
     JSONObject queue=JsonDisk.read(c,"queue.json");
-    if(queue.has("items") && queue.getJSONArray("items").length()>0) {
+    String owner=CloudSync.prefs(c).getString("libraryOwner","");
+    if(!queue.optString("owner").equals(owner) || queue.optJSONArray("items")==null || queue.getJSONArray("items").length()==0)
+      queue=JsonDisk.read(c,"cloud-resume.json");
+    if(queue.optString("owner").equals(CloudSync.prefs(c).getString("libraryOwner","")) && queue.has("items") && queue.getJSONArray("items").length()>0) {
       JSONArray items=queue.getJSONArray("items"); boolean portable=true;
       for(int i=0;i<items.length();i++) {
         Track track=Library.decode(items.getJSONObject(i));
@@ -56,7 +59,7 @@ final class CloudData {
         }
         if(!remote(track)) portable=false;
       }
-      if(portable) out.put("resume",queue);
+      if(portable) { queue.remove("owner"); out.put("resume",queue); }
     }
     return out;
   }
@@ -65,6 +68,37 @@ final class CloudData {
     apply(c,data,true);
   }
   static void apply(Context c, JSONObject data, boolean preserveLocal) throws Exception {
+    applyTransaction(c,data,preserveLocal,false);
+  }
+  static JSONObject localSnapshot(Context c) throws Exception {
+    JSONObject snapshot=snapshot(c); JSONArray all=new JSONArray();
+    for(Library.Playlist p:new Library(c).playlists) {
+      JSONArray tracks=new JSONArray(); for(Track t:p.tracks) tracks.put(Library.encode(t));
+      all.put(new JSONObject().put("id",p.id).put("name",p.name).put("origin",p.origin).put("tracks",tracks));
+    }
+    return snapshot.put("_localPlaylists",all).put("_localQueue",JsonDisk.read(c,"queue.json"));
+  }
+  static void applyLocal(Context c,JSONObject data) throws Exception { applyTransaction(c,data,false,true); }
+  private static void applyTransaction(Context c,JSONObject data,boolean preserveLocal,boolean trustedLocal) throws Exception {
+    JSONObject before=localSnapshot(c);
+    JsonDisk.write(c,"cloud-apply-journal.json",new JSONObject().put("pending",true).put("before",before));
+    try {
+      applyValidated(c,data,preserveLocal,trustedLocal);
+      JsonDisk.write(c,"cloud-apply-journal.json",new JSONObject().put("pending",false));
+    } catch(Exception failure) {
+      try { applyValidated(c,before,false,true); JsonDisk.write(c,"cloud-apply-journal.json",new JSONObject().put("pending",false)); }
+      catch(Exception rollbackFailure) { failure.addSuppressed(rollbackFailure); }
+      throw failure;
+    }
+  }
+  static void recoverPending(Context c) throws Exception {
+    JSONObject journal=JsonDisk.read(c,"cloud-apply-journal.json");
+    if(journal.optBoolean("pending")) {
+      applyValidated(c,journal.getJSONObject("before"),false,true);
+      JsonDisk.write(c,"cloud-apply-journal.json",new JSONObject().put("pending",false));
+    }
+  }
+  private static void applyValidated(Context c, JSONObject data, boolean preserveLocal,boolean trustedLocal) throws Exception {
     if(data.length()>100000) throw new java.io.IOException("This library is too large to sync.");
     Library existing=new Library(c); JSONArray playlists=new JSONArray(), shows=new JSONArray(), previews=new JSONArray();
     JSONObject wishes=new JSONObject(); Set<String> keys=new TreeSet<>(); data.keys().forEachRemaining(keys::add);
@@ -95,6 +129,7 @@ final class CloudData {
       for(int j=0;j<playlists.length();j++) if(used.add(playlists.getJSONObject(j).getString("id"))) ordered.put(playlists.getJSONObject(j));
       playlists=ordered;
     }
+    if(trustedLocal && data.has("_localPlaylists")) playlists=data.getJSONArray("_localPlaylists");
     for(String key:keys) if(key.startsWith("show/")) {
       JSONObject show=new JSONObject(data.getJSONObject(key).toString());
       boolean subscribed=show.optBoolean("subscribed"); show.remove("subscribed"); (subscribed?shows:previews).put(show);
@@ -148,6 +183,8 @@ final class CloudData {
       JSONObject p=data.getJSONObject(key); String id=p.getString("id");
       progress.putLong(id,Math.max(0,p.optLong("position"))).putBoolean(id+".done",p.optBoolean("done"));
     } progress.apply();
-    if(data.has("resume")) JsonDisk.write(c,"cloud-resume.json",data.getJSONObject("resume"));
+    JSONObject resume=data.has("resume")?new JSONObject(data.getJSONObject("resume").toString()):new JSONObject();
+    resume.put("owner",CloudSync.prefs(c).getString("libraryOwner","")); JsonDisk.write(c,"cloud-resume.json",resume);
+    if(trustedLocal && data.has("_localQueue")) JsonDisk.write(c,"queue.json",data.getJSONObject("_localQueue"));
   }
 }

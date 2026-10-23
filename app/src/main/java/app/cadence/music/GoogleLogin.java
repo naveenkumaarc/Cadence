@@ -29,7 +29,7 @@ final class GoogleLogin {
     String nonce=UUID.randomUUID().toString(); cancellation=new CancellationSignal();
     var option=new GetSignInWithGoogleOption.Builder(BuildConfig.GOOGLE_WEB_CLIENT_ID).setNonce(nonce).build();
     var request=new GetCredentialRequest.Builder().addCredentialOption(option).build();
-    manager.getCredentialAsync(activity,request,cancellation,activity.getMainExecutor(),new CredentialManagerCallback<GetCredentialResponse,GetCredentialException>() {
+    manager.getCredentialAsync(activity,request,cancellation,androidx.core.content.ContextCompat.getMainExecutor(activity),new CredentialManagerCallback<GetCredentialResponse,GetCredentialException>() {
       @Override public void onResult(GetCredentialResponse response) {
         try {
           GoogleIdTokenCredential credential=GoogleIdTokenCredential.createFrom(response.getCredential().getData());
@@ -65,7 +65,7 @@ final class GoogleLogin {
     } catch(Exception e) { error.accept("Drive permission was not completed. You can reconnect from your profile."); }
   }
   void clear() {
-    manager.clearCredentialStateAsync(new ClearCredentialStateRequest(),null,activity.getMainExecutor(),new CredentialManagerCallback<Void,ClearCredentialException>() {
+    manager.clearCredentialStateAsync(new ClearCredentialStateRequest(),null,androidx.core.content.ContextCompat.getMainExecutor(activity),new CredentialManagerCallback<Void,ClearCredentialException>() {
       @Override public void onResult(Void ignored) {}
       @Override public void onError(ClearCredentialException ignored) {}
     });
