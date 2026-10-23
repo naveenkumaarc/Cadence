@@ -74,6 +74,8 @@ public class RedesignIntegrationTest {
   }
 
   @Test public void nativeScreensAndPlayerSeekKeepElapsedAndRemainingInSync() throws Exception {
+    if (android.os.Build.VERSION.SDK_INT >= 33)
+      instrumentation.getUiAutomation().grantRuntimePermission(context.getPackageName(), android.Manifest.permission.POST_NOTIFICATIONS);
     // Public CI uses synthetic data. Optional private migration inputs stay on the test device.
     String migration = InstrumentationRegistry.getArguments().getString("migrationBackup");
     String expectedPlaylist = InstrumentationRegistry.getArguments().getString("migrationPlaylist", "Migration fixture");
@@ -178,6 +180,6 @@ public class RedesignIntegrationTest {
         assertEquals(View.GONE,((View)field(activity,"playerPrevious")).getVisibility());
       });
       screenshot("podcast-player");
-    } finally { onMain(activity::finish); }
+    } finally { onMain(activity::finish); instrumentation.waitForIdleSync(); }
   }
 }

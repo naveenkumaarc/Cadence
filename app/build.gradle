@@ -1,4 +1,12 @@
+import app.cadence.build.UrlCodecVisitor
+import com.android.build.api.instrumentation.InstrumentationScope
+
 plugins { id 'com.android.application' }
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.instrumentation.transformClassesWith(UrlCodecVisitor.class, InstrumentationScope.ALL) {}
+    }
+}
 android {
     namespace 'app.cadence.music'
     compileSdk 35

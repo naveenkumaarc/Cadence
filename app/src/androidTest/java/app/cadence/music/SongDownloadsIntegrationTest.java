@@ -42,6 +42,8 @@ public class SongDownloadsIntegrationTest {
   }
 
   @Test public void downloadedSongPersistsShowsAcrossPlaylistsAndDecodesWithoutRemoteSource() throws Exception {
+    if (android.os.Build.VERSION.SDK_INT >= 33)
+      instrumentation.getUiAutomation().grantRuntimePermission(context.getPackageName(), android.Manifest.permission.POST_NOTIFICATIONS);
     Track song = new Track("Offline fixture", "Cadence test", "https://www.youtube.com/watch?v=offline0001", "", 3);
     SongDownloads downloads = SongDownloads.get(context); downloads.remove(song);
     Library library = new Library(context); library.playlists.removeIf(p -> p.id.equals("offline-csv"));

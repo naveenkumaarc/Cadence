@@ -62,7 +62,7 @@ public final class YouTube {
         chosen.getAverageBitrate());
   }
 
-  public static synchronized Track metadata(String url) throws Exception {
+  public static Track metadata(String url) throws Exception {
     StreamInfo info = StreamInfo.getInfo(ServiceList.YouTube, Links.youtubeVideo(url));
     return new Track(MusicText.title(info.getName()), MusicText.artist(info.getUploaderName()),
         info.getUrl(), artwork(info.getThumbnails()), info.getDuration());

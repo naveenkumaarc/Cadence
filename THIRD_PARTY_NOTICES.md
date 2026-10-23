@@ -8,7 +8,7 @@ Dependencies retain their respective licenses. This is not a replacement for the
 |---|---|---|
 | NewPipeExtractor | v0.26.5 | GPL-3.0-or-later — https://github.com/TeamNewPipe/NewPipeExtractor |
 | NewPipe nanojson fork | e9d656ddb49a412a5a0a5d5ef20ca7ef09549996 | Apache-2.0 — https://github.com/TeamNewPipe/nanojson |
-| AndroidX Media3 | 1.5.1 | Apache-2.0 — https://github.com/androidx/media |
+| AndroidX Media3 | 1.8.0 | Apache-2.0 — https://github.com/androidx/media |
 | AndroidX Core | 1.15.0 | Apache-2.0 — https://android.googlesource.com/platform/frameworks/support/ |
 | AndroidX Test / test runner (tests only) | runner 1.6.2, ext JUnit 1.2.1 | Apache-2.0 — https://github.com/android/android-test |
 | AndroidX Concurrent Futures | 1.2.0 | Apache-2.0 — https://android.googlesource.com/platform/frameworks/support/ |
@@ -24,3 +24,5 @@ Dependencies retain their respective licenses. This is not a replacement for the
 | JUnit (tests) | 4.13.2 | EPL-1.0 — https://github.com/junit-team/junit4 |
 
 The abstract fallback artwork and waveform app icon are original native drawing code included with the source. There are no copied Spotify or Apple screen assets.
+
+For Android API 26–32 compatibility, the build redirects NewPipeExtractor's `URLDecoder.decode(String, Charset)` and `URLEncoder.encode(String, Charset)` calls to equivalent charset-name overloads. The transformation source is in `buildSrc/` and the adapter is `UrlCodecCompat.java`. The original extractor source archive remains in `vendor/sources/`; these supplied transformation sources describe the modification to the APK's extractor bytecode.

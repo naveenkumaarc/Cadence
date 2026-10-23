@@ -100,6 +100,9 @@ final class SongDownloads {
     for (Entry entry : entries.values()) if (state(entry.track).complete) tracks.add(entry.track);
     return tracks;
   }
+  synchronized void completed(long job) {
+    for (Entry entry : entries.values()) if (entry.job == job) { state(entry.track); break; }
+  }
   synchronized Library.Playlist playlist() {
     Library.Playlist playlist = new Library.Playlist("Downloaded"); playlist.id = PLAYLIST_ID;
     playlist.tracks.addAll(tracks()); return playlist;

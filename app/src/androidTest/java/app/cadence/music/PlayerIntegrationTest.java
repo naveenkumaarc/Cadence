@@ -120,11 +120,16 @@ public class PlayerIntegrationTest {
     // Service bookkeeping disappears before the platform media session has
     // finished releasing. Wait for Android's routing state as well.
     var automation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
-    automation.adoptShellPermissionIdentity("android.permission.MEDIA_CONTENT_CONTROL");
-    try {
-      var sessions = (android.media.session.MediaSessionManager)context.getSystemService(Context.MEDIA_SESSION_SERVICE);
-      until(() -> sessions.getActiveSessions(null).stream().noneMatch(s -> s.getPackageName().equals(context.getPackageName())));
-    } finally { automation.dropShellPermissionIdentity(); }
+    boolean released = false;
+    for (int i=0; i<100 && !released; i++) {
+      try (var input = new android.os.ParcelFileDescriptor.AutoCloseInputStream(
+          automation.executeShellCommand("dumpsys media_session"))) {
+        released = !new String(input.readAllBytes(), StandardCharsets.UTF_8)
+            .contains(context.getPackageName() + "/androidx.media3.session.id.");
+      }
+      if (!released) Thread.sleep(100);
+    }
+    assertTrue("The platform must release the old session before testing cold resumption", released);
   }
 
   @After

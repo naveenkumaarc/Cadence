@@ -75,6 +75,7 @@ public final class MainActivity extends Activity {
   private final java.util.Map<TextView, Track> songBadges = new java.util.LinkedHashMap<>();
   private final java.util.Map<TextView, Track> songTimes = new java.util.LinkedHashMap<>();
   private final java.util.Set<String> durationRequests = new java.util.HashSet<>();
+  private final java.util.Map<String, Long> knownDurations = new java.util.HashMap<>();
   private final ExecutorService durationWorkers = Executors.newSingleThreadExecutor();
   private MusicCatalog.Home homeCatalog;
   private boolean homeLoading = false;
@@ -246,6 +247,9 @@ public final class MainActivity extends Activity {
   @Override
   protected void onDestroy() {
     destroyed = true;
+    ui.removeCallbacksAndMessages(null);
+    if (playerDialog != null) playerDialog.dismiss();
+    if (queueDialog != null) queueDialog.dismiss();
     workers.shutdownNow();
     discoveryWorkers.shutdownNow();
     suggestions.shutdownNow();
@@ -2326,18 +2330,27 @@ public final class MainActivity extends Activity {
   private void requestSongDuration(Track track) {
     if (track.podcast || track.durationSeconds > 0 || track.sourceUrl.isEmpty()) return;
     String source = track.sourceUrl;
+    Long known = knownDurations.get(SongDownloads.key(source));
+    if (known != null) {
+      track.durationSeconds = known;
+      for (var entry : songTimes.entrySet()) if (entry.getValue() == track) entry.getKey().setText(duration(known));
+      save(); return;
+    }
     try { app.cadence.core.Links.youtubeVideo(source); } catch (Exception unsupported) { return; }
     if (!durationRequests.add(source)) return;
     durationWorkers.execute(() -> {
       try {
         long seconds = YouTube.metadata(source).durationSeconds;
         ui.post(() -> { if (!destroyed) rememberSongDuration(source, seconds); });
-      } catch (Exception ignored) { /* Keep the confirmed version and retry on a later launch. */ }
+      } catch (Exception | LinkageError ignored) { /* Keep the confirmed version and retry on a later launch. */ }
     });
   }
 
   private void rememberSongDuration(String source, long seconds) {
     if (seconds <= 0 || library == null) return;
+    String key = SongDownloads.key(source);
+    Long previous = knownDurations.put(key, seconds);
+    if (previous != null && previous == seconds) return;
     boolean changed = false;
     for (Library.Playlist playlist : library.playlists) for (Track track : playlist.tracks)
       if (track.durationSeconds <= 0 && SongDownloads.key(track.sourceUrl).equals(SongDownloads.key(source))) {
