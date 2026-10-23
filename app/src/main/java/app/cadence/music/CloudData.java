@@ -132,7 +132,10 @@ final class CloudData {
     catch(Exception e) { if(stream!=null) libraryFile.failWrite(stream); throw e; }
     PodcastStore.get(c).replaceCloud(shows,previews);
     DownloadList.replace(c,wishes);
-    JsonDisk.write(c,"cloud-profile.json",new JSONObject().put("name",name).put("photo",photo));
+    JSONObject nextProfile=new JSONObject();
+    if(data.has("profile/name")) nextProfile.put("name",name);
+    if(data.has("profile/photo")) nextProfile.put("photo",photo);
+    JsonDisk.write(c,"cloud-profile.json",nextProfile);
     var edit=Preferences.get(c).edit(); for(String key:PREFS) edit.remove(key);
     for(String key:PREFS) {
       Object value=data.opt("pref/"+key);

@@ -44,7 +44,7 @@ final class CloudSync {
     MAIN.post(()-> { if(pending!=null) MAIN.removeCallbacks(pending); pending=()->schedule(app); MAIN.postDelayed(pending,2000); });
   }
   static void progressChanged(Context c) {
-    long now=SystemClock.elapsedRealtime(); if(now-lastProgress>30000) { lastProgress=now; changed(c); }
+    long now=android.os.SystemClock.elapsedRealtime(); if(now-lastProgress>30000) { lastProgress=now; changed(c); }
   }
   private static Constraints constraints() { return new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(); }
   static void schedule(Context c) {
