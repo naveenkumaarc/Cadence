@@ -1,0 +1,6 @@
+plugins { id 'application' }
+dependencies { implementation project(':core'); implementation 'com.google.code.gson:gson:2.11.0' }
+application { mainClass = project.hasProperty('catalogProbe') ? 'app.cadence.probe.CatalogProbe' : 'app.cadence.probe.Probe' }
+
+tasks.register('updateProbe', JavaExec) { classpath = sourceSets.main.runtimeClasspath; mainClass = 'app.cadence.probe.UpdateProbe' }
+tasks.register('artworkProbe', JavaExec) { classpath = sourceSets.main.runtimeClasspath; mainClass = 'app.cadence.probe.ArtworkProbe' }

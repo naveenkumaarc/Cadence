@@ -1,0 +1,45 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'app.cadence.music'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'app.cadence.player'
+        minSdk 26
+        targetSdk 35
+        versionCode 5
+        versionName '2.0'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('CADENCE_KEYSTORE') ?: '../../signing/cadence-release.jks')
+            storePassword System.getenv('CADENCE_STORE_PASSWORD')
+            keyAlias 'cadence'
+            keyPassword System.getenv('CADENCE_KEY_PASSWORD') ?: System.getenv('CADENCE_STORE_PASSWORD')
+        }
+    }
+    buildTypes {
+        release {
+            if (!project.hasProperty('cadenceUnsigned')) signingConfig signingConfigs.release
+            debuggable false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
+    }
+    packaging { resources.excludes += ['META-INF/DEPENDENCIES', 'META-INF/INDEX.LIST'] }
+    lint { abortOnError true }
+}
+dependencies {
+    implementation project(':core')
+    implementation 'androidx.core:core:1.15.0'
+    implementation 'androidx.media3:media3-exoplayer:1.5.1'
+    implementation 'androidx.media3:media3-session:1.5.1'
+    implementation 'androidx.media3:media3-datasource-okhttp:1.5.1'
+    implementation 'androidx.concurrent:concurrent-futures:1.2.0'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+}
