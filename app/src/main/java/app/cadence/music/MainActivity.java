@@ -71,6 +71,11 @@ public final class MainActivity extends Activity {
   private Library library;
   private SearchHistory searchHistory;
   private PodcastStore podcasts;
+  private SongDownloads songDownloads;
+  private final java.util.Map<TextView, Track> songBadges = new java.util.LinkedHashMap<>();
+  private final java.util.Map<TextView, Track> songTimes = new java.util.LinkedHashMap<>();
+  private final java.util.Set<String> durationRequests = new java.util.HashSet<>();
+  private final ExecutorService durationWorkers = Executors.newSingleThreadExecutor();
   private MusicCatalog.Home homeCatalog;
   private boolean homeLoading = false;
   private String homeError = "", language = "All", searchFilter = "All";
@@ -156,6 +161,7 @@ public final class MainActivity extends Activity {
       library = new Library(this);
       searchHistory = new SearchHistory(this);
       podcasts = PodcastStore.get(this);
+      songDownloads = SongDownloads.get(this);
       java.io.File cached = new java.io.File(getFilesDir(), "discovery.json");
       if (cached.isFile())
         try {
@@ -185,6 +191,7 @@ public final class MainActivity extends Activity {
           public void onReceive(android.content.Context c, Intent i) {
             if (page.equals("Show") && shownShow != null) showPodcast(shownShow);
             else if (page.equals("Podcasts")) showPodcasts();
+            refreshSongDownloads();
           }
         };
     androidx.core.content.ContextCompat.registerReceiver(
@@ -242,6 +249,7 @@ public final class MainActivity extends Activity {
     workers.shutdownNow();
     discoveryWorkers.shutdownNow();
     suggestions.shutdownNow();
+    durationWorkers.shutdownNow();
     if (downloadsReceiver != null)
       try {
         unregisterReceiver(downloadsReceiver);
@@ -389,6 +397,7 @@ public final class MainActivity extends Activity {
 
   private void clear(String name, String subtitle) {
     page = name;
+    songBadges.clear(); songTimes.clear();
     body.removeAllViews();
     String selected =
         name.equals("Playlist")
@@ -885,6 +894,7 @@ public final class MainActivity extends Activity {
     gap(12);
     body.addView(button("Import from file", false, this::showImport));
     gap(18);
+    playlistCard(songDownloads.playlist());
     for (Library.Playlist playlist : library.playlists) playlistCard(playlist);
   }
 
@@ -912,7 +922,7 @@ public final class MainActivity extends Activity {
     card.setOnClickListener(v -> showPlaylist(playlist));
     card.setOnLongClickListener(
         v -> {
-          if (!playlist.id.equals("favourites"))
+          if (!playlist.id.equals("favourites") && !playlist.id.equals(SongDownloads.PLAYLIST_ID))
             new AlertDialog.Builder(this)
                 .setTitle(playlist.name)
                 .setItems(
@@ -948,7 +958,8 @@ public final class MainActivity extends Activity {
     gap(10);
   }
 
-  private void showPlaylist(Library.Playlist playlist) {
+  private void showPlaylist(Library.Playlist requested) {
+    Library.Playlist playlist = requested.id.equals(SongDownloads.PLAYLIST_ID) ? songDownloads.playlist() : requested;
     shownPlaylist = playlist;
     clear("Playlist", playlist.origin.isEmpty() ? "Your collection" : "Imported playlist");
     body.addView(text(playlist.name, 32, INK, true));
@@ -970,13 +981,16 @@ public final class MainActivity extends Activity {
       gap(12);
     }
     LinearLayout playActions = row();
-    playActions.addView(button("Play all", true, () -> playPlaylist(playlist.tracks, false)), new LinearLayout.LayoutParams(0, dp(50), 1));
-    playActions.addView(button("Shuffle play", false, () -> playPlaylist(playlist.tracks, true)), new LinearLayout.LayoutParams(0, dp(50), 1));
+    Library.Playlist displayed = playlist;
+    playActions.addView(button("Play all", true, () -> playPlaylist(displayed.tracks, false)), new LinearLayout.LayoutParams(0, dp(50), 1));
+    playActions.addView(button("Shuffle play", false, () -> playPlaylist(displayed.tracks, true)), new LinearLayout.LayoutParams(0, dp(50), 1));
     body.addView(playActions);
     gap(18);
     appendPlaylistTracks(playlist, 0);
     if (playlist.tracks.isEmpty())
-      body.addView(text("Save songs here from search, or import a playlist.", 14, MUTED, false));
+      body.addView(text(playlist.id.equals(SongDownloads.PLAYLIST_ID)
+          ? "Choose Download song from a song’s options. Completed songs appear here for offline listening."
+          : "Save songs here from search, or import a playlist.", 14, MUTED, false));
   }
 
   private void appendCollectionTracks(List<Track> tracks,int offset) {
@@ -1019,8 +1033,17 @@ public final class MainActivity extends Activity {
     artist.setEllipsize(android.text.TextUtils.TruncateAt.END);
     labels.addView(artist);
     row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
+    if (!track.podcast && !track.sourceUrl.isEmpty()) {
+      TextView badge = text("", 15, Color.rgb(91, 215, 154), true);
+      badge.setGravity(Gravity.CENTER); badge.setContentDescription("Download song " + track.title);
+      badge.setOnClickListener(v -> songDownloadAction(track, playlist));
+      row.addView(badge, new LinearLayout.LayoutParams(dp(32), dp(48)));
+      songBadges.put(badge, track); updateSongBadge(badge, track);
+    }
     TextView time = text(duration(track.durationSeconds), 11, MUTED, false);
-    row.addView(time, new LinearLayout.LayoutParams(dp(40), -2));
+    time.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+    row.addView(time, new LinearLayout.LayoutParams(dp(52), dp(48)));
+    songTimes.put(time, track); requestSongDuration(track);
     Button more = button("•••", false, () -> trackOptions(track, playlist));
     more.setContentDescription("Options for " + track.title);
     more.setMinWidth(0);
@@ -1049,7 +1072,11 @@ public final class MainActivity extends Activity {
                 "Save to playlist",
                 "Add to favourites",
                 "Choose another version"));
-    if (playlist != null) options.add("Remove from this playlist");
+    if (!track.podcast) {
+      SongDownloads.State state = songDownloads.state(track);
+      options.add(state.complete ? "Remove download" : state.active ? "Cancel download" : "Download song");
+    }
+    if (playlist != null && !playlist.id.equals(SongDownloads.PLAYLIST_ID)) options.add("Remove from this playlist");
     new AlertDialog.Builder(this)
         .setTitle(track.title)
         .setItems(
@@ -1069,6 +1096,7 @@ public final class MainActivity extends Activity {
                 case "Play next" -> enqueue(track, true, playlist);
                 case "Add to queue" -> enqueue(track, false, playlist);
                 case "Choose another version" -> findMatch(track, playlist);
+                case "Download song", "Cancel download", "Remove download" -> songDownloadAction(track, playlist);
 
                 case "Remove from this playlist" -> {
                   playlist.tracks.remove(track);
@@ -1146,9 +1174,7 @@ public final class MainActivity extends Activity {
                   titles,
                   (d, n) -> {
                     Track selected = candidates.get(n);
-                    wanted.sourceUrl = selected.sourceUrl;
-                    wanted.artwork = selected.artwork;
-                    wanted.matchState = "confirmed";
+                    wanted.confirmVersion(selected);
                     // Imported title, artist and order stay intact.
                     save();
                     if (playlist != null) showPlaylist(playlist);
@@ -1454,6 +1480,9 @@ public final class MainActivity extends Activity {
   private void updatePlayer() {
     if (controller == null || miniTitle == null) return;
     MediaItem item = controller.getCurrentMediaItem();
+    Track playingTrack = currentTrack();
+    if (playingTrack != null && !playingTrack.podcast && controller.getDuration() > 0)
+      rememberSongDuration(playingTrack.sourceUrl, controller.getDuration() / 1000);
     boolean playing = controller.getPlayWhenReady() && controller.getPlaybackState()!=Player.STATE_ENDED && controller.getPlayerError()==null;
     miniPlay.icon(playing ? TransportButton.Icon.PAUSE : TransportButton.Icon.PLAY);
     mini.setVisibility(item == null ? View.GONE : View.VISIBLE);
@@ -1618,6 +1647,7 @@ public final class MainActivity extends Activity {
     surface.addView(playerState);
     musicExtras = row(); musicExtras.setPadding(0,dp(12),0,dp(8));
     musicExtras.addView(icon("save", "Save to playlist", () -> { Track t = currentTrack(); if (t != null) choosePlaylist(t); }), new LinearLayout.LayoutParams(0,dp(48),1));
+    musicExtras.addView(icon("download", "Download current song", () -> { Track t = currentTrack(); if (t != null) songDownloadAction(t, null); }), new LinearLayout.LayoutParams(0,dp(48),1));
     playerShuffle = icon("shuffle", "Shuffle", () -> {
       if (controller != null) { controller.setShuffleModeEnabled(!controller.getShuffleModeEnabled()); updatePlayer(); }
     });
@@ -2253,6 +2283,71 @@ public final class MainActivity extends Activity {
     if (podcasts == null) return;
     for (var kv : downloadButtons.entrySet())
       kv.getValue().setText(podcasts.download(kv.getKey()).label);
+    refreshSongDownloads();
+  }
+
+  private void updateSongBadge(TextView badge, Track track) {
+    SongDownloads.State state = songDownloads.state(track);
+    badge.setText(state.complete ? "✓" : state.active ? "↓" : "");
+    badge.setContentDescription(state.complete ? "Available offline: " + track.title
+        : state.active ? state.label + ": " + track.title : "Download song " + track.title);
+  }
+
+  private void refreshSongDownloads() {
+    if (songDownloads == null) return;
+    for (var entry : songBadges.entrySet()) updateSongBadge(entry.getKey(), entry.getValue());
+    if (page.equals("Playlist") && shownPlaylist != null && shownPlaylist.id.equals(SongDownloads.PLAYLIST_ID)) {
+      List<Track> downloaded = songDownloads.tracks();
+      if (downloaded.size() != shownPlaylist.tracks.size()) showPlaylist(songDownloads.playlist());
+    }
+  }
+
+  private void songDownloadAction(Track track, Library.Playlist playlist) {
+    if (track.sourceUrl.isEmpty()) { findMatch(track, playlist, () -> songDownloadAction(track, playlist)); return; }
+    SongDownloads.State state = songDownloads.state(track);
+    if (state.complete || state.active) {
+      new AlertDialog.Builder(this).setTitle(track.title)
+          .setItems(new String[] {state.complete ? "Play offline" : "Keep downloading",
+              state.complete ? "Remove download" : "Cancel download"}, (dialog, which) -> {
+            if (which == 0 && state.complete) play(track, List.of(track));
+            if (which == 1) {
+              try { songDownloads.remove(track); refreshSongDownloads(); toast("Download removed. Your playlists are kept."); }
+              catch (Exception failure) { error("Removing download", failure); }
+            }
+          }).show();
+      return;
+    }
+    String scheme = Uri.parse(track.sourceUrl).getScheme();
+    if ("file".equals(scheme) || "content".equals(scheme)) { toast("This audio is already on your phone."); return; }
+    work("Preparing song download…", () -> { songDownloads.start(track); return true; },
+        ignored -> { toast("Song download started"); refreshSongDownloads(); });
+  }
+
+  private void requestSongDuration(Track track) {
+    if (track.podcast || track.durationSeconds > 0 || track.sourceUrl.isEmpty()) return;
+    String source = track.sourceUrl;
+    try { app.cadence.core.Links.youtubeVideo(source); } catch (Exception unsupported) { return; }
+    if (!durationRequests.add(source)) return;
+    durationWorkers.execute(() -> {
+      try {
+        long seconds = YouTube.metadata(source).durationSeconds;
+        ui.post(() -> { if (!destroyed) rememberSongDuration(source, seconds); });
+      } catch (Exception ignored) { /* Keep the confirmed version and retry on a later launch. */ }
+    });
+  }
+
+  private void rememberSongDuration(String source, long seconds) {
+    if (seconds <= 0 || library == null) return;
+    boolean changed = false;
+    for (Library.Playlist playlist : library.playlists) for (Track track : playlist.tracks)
+      if (track.durationSeconds <= 0 && SongDownloads.key(track.sourceUrl).equals(SongDownloads.key(source))) {
+        track.durationSeconds = seconds; changed = true;
+      }
+    for (var entry : songTimes.entrySet()) if (SongDownloads.key(entry.getValue().sourceUrl).equals(SongDownloads.key(source))) {
+      if (entry.getValue().durationSeconds <= 0) entry.getValue().durationSeconds = seconds;
+      entry.getKey().setText(duration(entry.getValue().durationSeconds));
+    }
+    if (changed) save();
   }
 
   private void enqueue(Track track, boolean next, Library.Playlist playlist) {

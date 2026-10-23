@@ -1,3 +1,7 @@
 #!/usr/bin/env bash
-set -euo pipefail
-exec ./gradlew --no-daemon :app:connectedDebugAndroidTest
+set -uo pipefail
+./gradlew --no-daemon :app:connectedDebugAndroidTest
+status=$?
+mkdir -p artifacts
+adb logcat -d -v threadtime > artifacts/media-logcat.txt
+exit "$status"

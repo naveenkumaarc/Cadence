@@ -11,6 +11,11 @@ import java.util.*;
 final class AutoLibrary {
   private final Context context;
   AutoLibrary(Context c) { context = c; }
+  private Library library() throws Exception {
+    Library library = new Library(context);
+    library.playlists.add(SongDownloads.get(context).playlist());
+    return library;
+  }
   static MediaItem folder(String id, String title) {
     return new MediaItem.Builder().setMediaId(id).setMediaMetadata(new MediaMetadata.Builder()
         .setTitle(title).setIsBrowsable(true).setIsPlayable(false).setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED).build()).build();
@@ -26,7 +31,7 @@ final class AutoLibrary {
     if (parent.equals("root")) return List.of(folder("playlist:favourites","Liked Songs"),folder("playlists","Playlists"),folder("podcasts","Podcasts"),folder("continue","Continue listening"));
     List<MediaItem> out = new ArrayList<>();
     if (parent.equals("playlists") || parent.startsWith("playlist:")) {
-      Library lib = new Library(context);
+      Library lib = library();
       for (var p : lib.playlists) {
         if (parent.equals("playlists")) out.add(folder("playlist:"+p.id,p.name));
         else if (parent.equals("playlist:"+p.id)) {
@@ -51,7 +56,7 @@ final class AutoLibrary {
     if (id.equals("playlists") || id.equals("podcasts") || id.equals("continue"))
       return folder(id,id.equals("playlists")?"Playlists":id.equals("podcasts")?"Podcasts":"Continue listening");
     if (id.startsWith("playlist:") || id.startsWith("track:")) {
-      Library library=new Library(context);
+      Library library=library();
       String key=id.substring(id.indexOf(':')+1); int index=-1;
       if(id.startsWith("track:")) {
         int separator=key.lastIndexOf(':');
@@ -93,7 +98,7 @@ final class AutoLibrary {
   List<MediaItem> search(String term) throws Exception {
     String query=term.trim().toLowerCase(Locale.ROOT); List<MediaItem> out=new ArrayList<>();
     if(query.isEmpty()) return out;
-    Library library=new Library(context);
+    Library library=library();
     for(var playlist:library.playlists) for(int i=0;i<playlist.tracks.size();i++) {
       Track track=playlist.tracks.get(i);
       if(!track.sourceUrl.isEmpty() && (track.title+" "+track.artist).toLowerCase(Locale.ROOT).contains(query))

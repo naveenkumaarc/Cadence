@@ -21,4 +21,12 @@ public final class Track {
   public String searchQuery() {
     return title + " " + artist + " audio";
   }
+
+  /** Confirm a playable version while retaining the imported song's identity and order. */
+  public void confirmVersion(Track selected) {
+    sourceUrl = selected.sourceUrl;
+    artwork = selected.artwork;
+    if (selected.durationSeconds > 0) durationSeconds = selected.durationSeconds;
+    matchState = "confirmed";
+  }
 }

@@ -117,6 +117,14 @@ public class PlayerIntegrationTest {
     controller = null;
     context.stopService(new android.content.Intent(context, PlaybackService.class));
     until(() -> playbackService() == null);
+    // Service bookkeeping disappears before the platform media session has
+    // finished releasing. Wait for Android's routing state as well.
+    var automation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
+    automation.adoptShellPermissionIdentity("android.permission.MEDIA_CONTENT_CONTROL");
+    try {
+      var sessions = (android.media.session.MediaSessionManager)context.getSystemService(Context.MEDIA_SESSION_SERVICE);
+      until(() -> sessions.getActiveSessions(null).stream().noneMatch(s -> s.getPackageName().equals(context.getPackageName())));
+    } finally { automation.dropShellPermissionIdentity(); }
   }
 
   @After

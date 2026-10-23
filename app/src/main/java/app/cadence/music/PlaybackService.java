@@ -44,10 +44,14 @@ public final class PlaybackService extends MediaLibraryService {
   private android.media.AudioManager audioManager;
   private android.media.AudioFocusRequest focusRequest;
   private boolean focusHeld, resumeOnFocusGain;
+  private long focusDeadline;
+  private final Runnable focusAfterForeground = () -> {
+    if (!disposed && player != null && player.getPlayWhenReady()) ensureFocus();
+  };
   private float duck = 1f;
   private final Runnable playbackTick = new Runnable() {
     public void run() {
-      if (crossfade != null) crossfade.tick();
+      if (focusHeld && crossfade != null) crossfade.tick();
       extendRadio();
       handler.postDelayed(this, 100);
     }
@@ -91,9 +95,13 @@ public final class PlaybackService extends MediaLibraryService {
                     type == null || !type.toLowerCase(java.util.Locale.ROOT).contains("text/html"));
     var resolver =
         new ResolvingDataSource.Factory(
-            network,
+            new DefaultDataSource.Factory(this, network),
             spec -> {
               String url = spec.uri.toString();
+              try {
+                String local = SongDownloads.get(this).localUri(url);
+                if (local != null) return spec.withUri(android.net.Uri.parse(local));
+              } catch (Exception unavailable) { /* Keep the original source available. */ }
               if (!url.startsWith("https://www.youtube.com/watch?v=")) return spec;
               String key = Links.youtubeVideo(url);
               Cached cached = urls.get(key);
@@ -107,7 +115,7 @@ public final class PlaybackService extends MediaLibraryService {
               }
               return spec.withUri(android.net.Uri.parse(cached.url));
             });
-    sourceFactory = new DefaultMediaSourceFactory(new DefaultDataSource.Factory(this, resolver));
+    sourceFactory = new DefaultMediaSourceFactory(resolver);
     audioManager = (android.media.AudioManager)getSystemService(AUDIO_SERVICE);
     focusRequest = new android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
       .setAudioAttributes(new android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA).setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC).build())
@@ -436,8 +444,13 @@ public final class PlaybackService extends MediaLibraryService {
         new Player.Listener() {
           @Override public void onPlayWhenReadyChanged(boolean ready, int reason) {
             if (owner != player) return;
-            if (ready) ensureFocus();
-            else if (!resumeOnFocusGain) abandonFocus();
+            if (ready) {
+              focusDeadline = android.os.SystemClock.elapsedRealtime() + 5000;
+              ensureFocus();
+            } else {
+              handler.removeCallbacks(focusAfterForeground);
+              if (!resumeOnFocusGain) abandonFocus();
+            }
           }
           @Override
           public void onMediaItemTransition(MediaItem item, int reason) {
@@ -775,9 +788,21 @@ public final class PlaybackService extends MediaLibraryService {
 
   private void ensureFocus() {
     if (focusHeld || audioManager == null) return;
+    if (android.os.Build.VERSION.SDK_INT >= 35 && !isPlaybackOngoing()) {
+      // Media3 promotes the service in response to Play. Android 15 rejects
+      // focus before that asynchronous notification update completes. Keep
+      // the renderer silent until we have both foreground status and focus.
+      player.setVolume(0f);
+      handler.removeCallbacks(focusAfterForeground);
+      if (android.os.SystemClock.elapsedRealtime() < focusDeadline)
+        handler.postDelayed(focusAfterForeground, 25);
+      else player.pause();
+      return;
+    }
     resumeOnFocusGain = false;
     focusHeld = audioManager.requestAudioFocus(focusRequest) == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
     if (!focusHeld) { player.pause(); if (crossfade != null) crossfade.cancel(); }
+    else if (crossfade == null || crossfade.started == 0) player.setVolume(duck);
   }
   private void abandonFocus() {
     if (audioManager != null && focusHeld) audioManager.abandonAudioFocusRequest(focusRequest);
