@@ -1,0 +1,39 @@
+CADENCE 2.0.1
+
+INSTALL
+Install Cadence-2.0.1.apk directly over the Cadence 2.0 supplied in this chat.
+Do not uninstall 2.0. This update keeps the same package and signing key and
+increases the version code, so existing app data is retained.
+
+If you are still using 0.3.1, its missing original signing key still requires
+backup/restore migration. Save and verify a backup in the OLD app before
+removing it. See the GitHub README for those steps.
+
+DOWNLOAD SONGS
+Use a song's three-dot options > Download song, or the player's download icon.
+Completed songs appear in Your Library > Downloaded. The green check shows
+that the same version is available offline in any other playlist. Playback
+uses the local copy automatically. Tap the download status for cancel/retry,
+offline playback or removal. Removing a download keeps playlist entries.
+
+Downloads continue through Android's download manager. Offline audio stays
+in Cadence's app storage and is removed by uninstalling; JSON backups do not
+include audio. A failed transfer can be retried with a fresh source address.
+
+DURATIONS
+Manual version selection now saves the selected song's length. Missing
+lengths on previously matched songs are fetched when their playlist opens,
+or saved when they play. Remote metadata needs an internet connection.
+
+PLAYBACK
+The update retains paused playback during Media3's bounded grace period,
+handles Android 15 foreground/audio-focus ordering, and registers headset
+playback resumption after the service has closed. Android Force stop blocks
+restart until the app is opened. Another media app may own the headset
+button until Cadence becomes the active player again.
+
+Android Auto integration is included; a physical head unit and actual
+Bluetooth hardware still require device checks. A GitHub APK may need
+Android Auto's developer option for media apps from unknown sources.
+
+Public source and downloads: https://github.com/naveenkumaarc/Cadence

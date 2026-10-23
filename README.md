@@ -1,12 +1,14 @@
-# Cadence 2.0
+# Cadence 2.0.1
 
 Native Android music and podcast player, Android 8 or newer. Charcoal Material-style surfaces, soft mint accents, rounded cards and native Media3 playback.
 
 ## Download APK
 
-[**Download Cadence 2.0 for Android**](https://raw.githubusercontent.com/naveenkumaarc/Cadence/main/downloads/Cadence-2.0.apk)
+[**Download Cadence 2.0.1 for Android**](https://raw.githubusercontent.com/naveenkumaarc/Cadence/main/downloads/Cadence-2.0.1.apk)
 
-Signed release APK · 6.14 MB · Android 8 or newer. The APK is also in [downloads/](downloads/). [SHA-256 checksum](downloads/SHA256SUMS.txt).
+Signed release APK · Android 8 or newer. The APK is also in [downloads/](downloads/). [SHA-256 checksum](downloads/SHA256SUMS.txt).
+
+**Using 2.0? Install this update directly over it. Do not uninstall. The package and signing key are the same, so app data is retained.**
 
 **Using 0.3.1? Save and verify a backup in the old app before uninstalling.** This release uses a new signing key and cannot install over 0.3.1. Follow the migration steps below to restore your library. Google may still request an unknown-app scan.
 
@@ -14,18 +16,28 @@ Signed release APK · 6.14 MB · Android 8 or newer. The APK is also in [downloa
 
 The original 0.3.1 private signing key was not supplied and is not in the source ZIP. Its public certificate is in the APK, but the private key cannot be recovered from it. A new key cannot replace an installed app signed with the missing old key.
 
-The delivered 2.0 APK uses a **new retained signing key**. Package `app.cadence.player`, version name `2.0`, version code `5`, and library/backup formats are retained. It **cannot install directly over 0.3.1** because the signing certificates differ.
+The 2.0 series uses a **new retained signing key**. Package `app.cadence.player`, version name `2.0.1`, version code `6`, and library/backup formats are retained. It **cannot install directly over 0.3.1** because the signing certificates differ.
 
 1. In the **old app**, choose **Settings → Save backup** and save the JSON outside the app's private storage, such as Documents. Check that it exists and contains your playlists before removing anything.
 2. Keep a second copy of the JSON. Uninstalling removes private app data and offline downloads.
-3. After confirming the backup, uninstall the old app and install the new-key 2.0 APK.
-4. In **2.0**, choose **Settings → Restore backup** and select that JSON. Check playlists, liked songs, subscriptions, progress and queue.
+3. After confirming the backup, uninstall the old app and install the new-key 2.0.1 APK.
+4. In **2.0.1**, choose **Settings → Restore backup** and select that JSON. Check playlists, liked songs, subscriptions, progress and queue.
 5. Download offline episodes again and reselect local audio files. Audio files and Android file permissions are not included in the JSON.
 
 The private signing kit is separate from this source repository. Keep it private and backed up. Reuse it for every future version and increase `versionCode`; those versions can update the 2.0 installation directly. If the original 0.3.1 key is ever found, this source can instead be signed with it for a direct update.
 
 Original 0.3.1 certificate SHA-256:
 `ad40247b98452fd8712c7b8b2282f33ae7a09fc71b51978b239cc3ce0d6f1e77`
+
+## Playback and song downloads in 2.0.1
+
+- Paused playback keeps Media3's bounded foreground grace period. Android's media-button receiver can restart a released service from the saved queue and position. Android 15 audio focus waits for the foreground service to be ready, with audio muted until focus is granted. Other apps still get audio focus normally.
+- Choose **Download song** from a song's options, or use the download icon in the music player. Android's DownloadManager continues the transfer in the background. Tap the status for cancel, retry, offline playback or removal.
+- Completed songs appear in **Your Library → Downloaded**. A green check appears beside the same downloaded version in other playlists. Playback uses its local copy automatically, including through Android Auto. Removing the download keeps playlist entries.
+- Selecting a CSV song's version now stores its duration. Missing lengths on already matched songs are fetched as their playlist is opened, or saved from playback, without replacing the chosen version or changing imported names and order. An internet connection is needed to fetch missing remote metadata.
+- Downloads live in app-specific Music storage. Uninstalling removes them; JSON backups do not contain audio files. A transfer that fails can be retried to resolve a fresh audio address.
+
+See [release notes](RELEASE-NOTES-2.0.1.md) and [verification](VERIFICATION.md).
 
 ## Design changes
 
@@ -70,4 +82,4 @@ CI can build an unsigned release without a private key:
 
 An unsigned APK must be signed before installing. A debug APK cannot update a release-signed installation.
 
-GPL-3.0-or-later. See COPYING and THIRD_PARTY_NOTICES.md. The downloadable source archive includes corresponding NewPipeExtractor source in vendor/sources. Live streaming and device-specific behaviour require phone checks. VERIFICATION.md records only checks actually run on 2.0.
+GPL-3.0-or-later. See COPYING and THIRD_PARTY_NOTICES.md. The downloadable source archive includes corresponding NewPipeExtractor source in vendor/sources. Live streaming and device-specific behaviour require phone checks. VERIFICATION.md records only checks actually run on 2.0.1; VERIFICATION-2.0.md records the earlier release.
