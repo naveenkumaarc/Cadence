@@ -1,31 +1,32 @@
-# Cadence 2.0.1 verification — 23 October 2026
+# Cadence 2.1 verification
 
-## Release identity and update preservation
+Checked code commit: `3cc4dee805f92da2cde1571fc0b1133393df973c`.
 
-- Package `app.cadence.player`, version name `2.0.1`, version code `6`, minimum Android API 26, target/compile API 35. Non-debuggable release APK.
-- APK SHA-256: `ba8c26bad889514932f5c0e45fe96429d45b173a22f9cea4922562e9fdcc682d`.
-- APK signature verification passed with the same certificate as the supplied 2.0 release: `26d127669bb122cc6768726c3b8a4a2573e3edf62c10cc20d8d8e90a84c1024f`. Standard v2/v3 signatures and ZIP alignment verified.
-- A release installation over 2.0 succeeded without uninstalling on a disposable API 30 emulator. A synthetic existing library remained byte-for-byte identical before and after installation and launch. No actual user library was used or published.
-- No added device permissions compared with 2.0. Private signing material stays outside the APK, source archive and public repository.
+GitHub Actions: https://github.com/naveenkumaarc/Cadence/actions/runs/39974978283
 
-## Automated checks
+## Build and automated checks
 
-Code commit: `c56f54e3f8d639592c60906c8dd00c681ff7a4fb`.
-Successful workflow: https://github.com/naveenkumaarc/Cadence/actions/runs/39949778536
+- Android 11 / API 30 and Android 15 / API 35: **32 core tests and 31 native Android tests on each matrix job**, zero failures, errors or skips.
+- Debug APK, Android test APK and unsigned release assembled successfully. Release lint completed with zero errors and 35 warnings, including existing layout/accessibility and dependency advisories.
+- New checks cover deterministic two-device merges/deletions, chosen CSV versions, download requests without false local completion, separate episode progress, invalid cloud data rollback, profile defaults, bulk-download cancellation/deduplication, Google-account library isolation, interrupted-apply recovery and legacy podcast download-list migration.
+- A native UI test presses the episode's circular play button, verifies actual local-audio playback and pause/resume, and checks that the episode list remains visible. The test also checks the profile/header entry.
+- Existing native playback, service restart, other-app audio focus, download/offline playback, backup, search, duration, scrubber and Android Auto browser checks remain in the suite.
 
-- Core: 27 tests passed, no failures/errors/skips. New checks cover retaining imported identity while saving the chosen version's duration and preserving a known length when the candidate has none.
-- Native Android: all 21 tests passed on both API 30 (Android 11) and API 35 (Android 15). This includes real local decoding, crossfade, queue/restore, podcast position and speed, backup merging, widgets, Android Auto library selection, search history and native player views.
-- Playback checks include a real 35-second paused podcast, a real 35-second permanent audio-focus interruption, manual media-key resume, service shutdown followed by Android-routed headset-style Play, queue/index/position/repeat/speed restoration and empty-history handling. Actual Bluetooth radio hardware was not used.
-- The song test used Android's DownloadManager to fetch a public synthetic three-second WAV over HTTPS, verified its exact SHA-256, reopened the stored download index, checked the Downloaded collection and green indicator in another playlist, decoded the downloaded bytes through a synthetic remote source ID, saved a missing duration, and removed the download without removing its playlist entry.
-- The packaged extractor URL codec round trip and video-link parser passed on both OS versions, including the API 26–32 compatibility adapter. This addresses a runtime overload absent before API 33.
-- Release lint: zero errors and 26 warnings. Debug, native test and unsigned release APKs built successfully. The tested unsigned release was signed locally with the retained private key.
+## Release and update
 
-## Behavior and limits
+- Package app.cadence.player; version name 2.1; versionCode 7; minSdk 26; targetSdk 35; non-debuggable release.
+- The APK was signed locally with the retained Cadence 2.0 / 2.0.1 key. APK v2/v3 signatures and alignment verified.
+- Certificate SHA-256: `26d127669bb122cc6768726c3b8a4a2573e3edf62c10cc20d8d8e90a84c1024f`.
+- Final APK SHA-256: `ee707acbc1cd7ebe5fe7ec3990456f181fc1bd7bb7785485d1b2b62ad423c9ba`.
+- Signed 2.1 installed directly over signed 2.0.1 on the disposable API 30 test emulator without uninstalling. The synthetic existing playlist/song metadata, podcast subscriptions and episode positions (20 and 45 minutes) were byte-for-byte unchanged after package replacement. The upgraded app launched and migrated the prior podcast download request into Saved downloads.
+- Artifact ZIP digests verified: API 30 `ba9e56e08b226e27dded780386dd3cd844f59de3a6b657faa65a567c634918d9`; API 35 `826b5621c5509b76047ba611db26e600005bcf33356ea5d5f8b5e9e7f303fc45`.
 
-- Media3 1.8.0 provides the bounded paused foreground grace (up to ten minutes). Cadence registers playback resumption, retains stable source IDs and saved playback settings, and delays Android 15 audio-focus acquisition until foreground status is established while keeping the renderer silent.
-- Completed music downloads live in app-specific Music storage. Playlists keep their original source IDs and automatically use local copies through the data-source resolver. Download removal does not remove playlist entries. The virtual Downloaded collection is included in the car library.
-- Metadata lookup can require internet access. Existing confirmed versions, imported names and order remain intact when filling a missing duration. The tests exercise actual synthetic media transfer and decoding; they do not establish the availability of every live remote song or signed stream URL.
-- A physical Bluetooth headset, the user's phone battery policy, live source-specific downloads and a physical Android Auto head unit remain device checks. Another active media app can own headset controls. Android Force stop blocks background restart until the app is opened.
-- No Google Play Protect verdict or certification was obtained. An unknown-app scan prompt can still appear.
-- The old 0.3.1 key is still missing; its users need the documented backup/restore migration. Users of the supplied 2.0 release can install this update directly. JSON backups do not contain downloaded audio.
-- VERIFICATION-2.0.md and VERIFICATION-0.3.1.md describe historical releases.
+## Google configuration
+
+Owner-approved project cadence-512513: Drive API enabled; Android release and Web OAuth clients created; basic identity and drive.appdata configured as non-sensitive scopes; homepage/privacy/terms published on GitHub Pages; publishing status verified as **In production**. Owner test account was added with explicit approval before publication. No Web client secret is used by the app or included in source or APK.
+
+## Practical limits
+
+Real Google sign-in, Drive upload/download and two physical phones have not been exercised with a personal account in this automated environment. Confirm these after installing the release: sign in, approve hidden Drive access, Sync now on the first phone, then sign in and Sync now on a second phone. Check a playlist edit, two different episode positions, custom profile and saved download requests in both directions. Audio must download separately. Revoked permission and offline retries also need a live Google-account check.
+
+No physical Bluetooth headset, car display, manufacturer-specific battery policy or Google Play Protect verdict is claimed. Android background timing and content-source availability depend on the device and provider. This is not Google brand or Play Protect certification. The original 0.3.1 key remains unavailable; its backup migration requirement is unchanged.

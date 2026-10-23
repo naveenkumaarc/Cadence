@@ -11,3 +11,7 @@ Public OAuth identifiers (not secrets):
 The Android app uses Credential Manager and Google's AuthorizationClient. It does not use a Web client secret, a service account or a Cadence backend. Never put client secrets or private signing material in the APK or repository.
 
 For a fork, register that app's package and signing certificate in the fork owner's Google project and supply `-PcadenceGoogleClientId=YOUR_WEB_CLIENT_ID` while building. Drive API and OAuth consent configuration must belong to the same project. Debug builds require a separate registered Android client for their debug signing certificate if Google sign-in itself is being tested.
+
+## Public configuration
+
+External audience, In production. Drive API enabled. Non-sensitive scopes: openid, userinfo.email, userinfo.profile and drive.appdata. Homepage: https://naveenkumaarc.github.io/Cadence/ ; privacy: https://naveenkumaarc.github.io/Cadence/privacy.html ; terms: https://naveenkumaarc.github.io/Cadence/terms.html . Verified configuration is separate from a live phone sign-in and Drive sync check.

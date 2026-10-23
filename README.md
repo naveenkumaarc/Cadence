@@ -1,60 +1,50 @@
-# Cadence 2.0.1
+# Cadence 2.1
 
-Native Android music and podcast player, Android 8 or newer. Charcoal Material-style surfaces, soft mint accents, rounded cards and native Media3 playback.
+Android music and podcast player, Android 8 or newer. Dark Material-style surfaces, rounded cards, native Media3 playback and optional Google Drive continuity.
 
-## Download APK
+## Download
 
-[**Download Cadence 2.0.1 for Android**](https://raw.githubusercontent.com/naveenkumaarc/Cadence/main/downloads/Cadence-2.0.1.apk)
+[**Download Cadence 2.1 APK**](https://github.com/naveenkumaarc/Cadence/releases/download/v2.1/Cadence-2.1.apk) · [Release, source archive and checksums](https://github.com/naveenkumaarc/Cadence/releases/tag/v2.1) · [Homepage](https://naveenkumaarc.github.io/Cadence/)
 
-Signed release APK · Android 8 or newer. The APK is also in [downloads/](downloads/). [SHA-256 checksum](downloads/SHA256SUMS.txt).
+**Using Cadence 2.0 or 2.0.1? Install this update over it without uninstalling.** The package and release signing key are retained. An in-place update from 2.0.1 was checked with a synthetic library, subscriptions and two episode positions.
 
-**Using 2.0? Install this update directly over it. Do not uninstall. The package and signing key are the same, so app data is retained.**
+## New in 2.1
 
-**Using 0.3.1? Save and verify a backup in the old app before uninstalling.** This release uses a new signing key and cannot install over 0.3.1. Follow the migration steps below to restore your library. Google may still request an unknown-app scan.
+- Optional Google sign-in, automatic hidden Drive sync and **Sync now**. Profile, playlists, likes, selected CSV song versions and durations, podcast subscriptions, episode progress, playback preferences and the saved queue can continue on another phone.
+- The download request list syncs; actual audio files, device paths, file permissions and completed-download flags stay on each phone. **Downloaded** shows songs available on this phone. **Saved downloads** lets another phone download the requested songs and episodes.
+- Google name and photo appear by default. Change the Cadence name/photo from the small profile photo beside **Cadence**. These changes do not change the Google account.
+- **Download all** in playlists skips existing downloads and offers preparation status, retry and cancellation. CSV rows still needing a song match are identified before downloading.
+- Downloaded songs use a green circle with a white tick, including when the same version appears in another playlist.
+- Each podcast episode shows its own played/remaining minutes. Its round ▶ / Ⅱ button controls playback while keeping the episode list visible.
 
-## Read before installing
+Sign-in stays optional. Tap the profile photo → **Sign in with Google**, choose whether to merge the current phone library, then approve hidden Cadence Drive storage. Use the same Google account on another phone. Changes sync while connected when the app opens and when Android schedules background work; **Sync now** requests an immediate check. Sync does not start remote playback automatically: **Continue listening** explicitly restores the saved queue.
 
-The original 0.3.1 private signing key was not supplied and is not in the source ZIP. Its public certificate is in the APK, but the private key cannot be recovered from it. A new key cannot replace an installed app signed with the missing old key.
+Cloud settings include automatic-sync control, sign-out and recent recovery copies. Local JSON backup/restore remains available. [Privacy policy](https://naveenkumaarc.github.io/Cadence/privacy.html) · [Google configuration for maintainers/forks](GOOGLE-CONFIG.md) · [Release notes](RELEASE-NOTES-2.1.md) · [Verification and limits](VERIFICATION.md).
 
-The 2.0 series uses a **new retained signing key**. Package `app.cadence.player`, version name `2.0.1`, version code `6`, and library/backup formats are retained. It **cannot install directly over 0.3.1** because the signing certificates differ.
+Google Cloud is configured for an External audience with publishing status **In production**, basic profile permissions and the non-sensitive `drive.appdata` scope. Android and Web OAuth clients use the retained release certificate. This configuration is distinct from testing a real account's sign-in and two-phone sync; that live account check still needs to be performed on Google-enabled phones.
 
-1. In the **old app**, choose **Settings → Save backup** and save the JSON outside the app's private storage, such as Documents. Check that it exists and contains your playlists before removing anything.
-2. Keep a second copy of the JSON. Uninstalling removes private app data and offline downloads.
-3. After confirming the backup, uninstall the old app and install the new-key 2.0.1 APK.
-4. In **2.0.1**, choose **Settings → Restore backup** and select that JSON. Check playlists, liked songs, subscriptions, progress and queue.
-5. Download offline episodes again and reselect local audio files. Audio files and Android file permissions are not included in the JSON.
+## Playback and compatibility
 
-The private signing kit is separate from this source repository. Keep it private and backed up. Reuse it for every future version and increase `versionCode`; those versions can update the 2.0 installation directly. If the original 0.3.1 key is ever found, this source can instead be signed with it for a direct update.
+The 2.0.1 fixes for paused-service recovery, Bluetooth media buttons, audio focus, CSV song lengths, offline downloads, search filters and the player scrubber remain. Android Auto's MediaLibraryService exposes the library and playback controls. Automated browser-client and playback tests pass; a physical car and headset have not been tested for this release. A sideloaded app may need Android Auto's developer **Unknown sources** option before appearing in the car app list.
 
-Original 0.3.1 certificate SHA-256:
-`ad40247b98452fd8712c7b8b2282f33ae7a09fc71b51978b239cc3ce0d6f1e77`
+Downloads use Android's DownloadManager and app-specific storage. Removing a download keeps playlist entries. Uninstalling removes private app data and app-specific audio downloads. Export a local backup before removing the app.
 
-## Playback and song downloads in 2.0.1
+## Original 0.3.1 migration
 
-- Paused playback keeps Media3's bounded foreground grace period. Android's media-button receiver can restart a released service from the saved queue and position. Android 15 audio focus waits for the foreground service to be ready, with audio muted until focus is granted. Other apps still get audio focus normally.
-- Choose **Download song** from a song's options, or use the download icon in the music player. Android's DownloadManager continues the transfer in the background. Tap the status for cancel, retry, offline playback or removal.
-- Completed songs appear in **Your Library → Downloaded**. A green check appears beside the same downloaded version in other playlists. Playback uses its local copy automatically, including through Android Auto. Removing the download keeps playlist entries.
-- Selecting a CSV song's version now stores its duration. Missing lengths on already matched songs are fetched as their playlist is opened, or saved from playback, without replacing the chosen version or changing imported names and order. An internet connection is needed to fetch missing remote metadata.
-- Downloads live in app-specific Music storage. Uninstalling removes them; JSON backups do not contain audio files. A transfer that fails can be retried to resolve a fresh audio address.
+The original 0.3.1 private signing key was not supplied. It cannot be recovered from its APK certificate. The retained key introduced with 2.0 cannot directly replace an installed 0.3.1 app.
 
-See [release notes](RELEASE-NOTES-2.0.1.md) and [verification](VERIFICATION.md).
+1. In 0.3.1, save a JSON backup outside app-private storage and verify that it contains your playlists. Keep a second copy.
+2. Only after checking the backup, uninstall 0.3.1 and install the new APK.
+3. In Cadence, choose **Settings → Restore backup** and select the JSON. Check your playlists, subscriptions and progress.
+4. Download offline audio again and reselect local files; audio and Android file permissions are not in the backup.
 
-## Design changes
-
-- Search: pill-shaped field, cover-art rows, persistent local recents and save/remove actions. Songs, Albums and Artists filters remain alongside All and Playlists. Explicit loading, empty and retry states.
-- Player: larger rounded artwork, white play button, a 4 dp high-contrast scrubber and separate elapsed/remaining labels. Dragging previews time; releasing performs one seek. Related songs or more podcast episodes appear underneath, with play/queue actions. Podcast skip intervals and speed controls remain.
-- Header: vertically aligned title, modern queue/adjustment icons and 48 dp touch targets.
-- Settings: grouped rounded cards for Discovery, Playback, Your library, Personalise and About, with icons, subtitles and a working autoplay switch.
-- Existing playback, playlists, backups, podcasts, downloads, widget and Android Auto support remain. No device permission was added.
+The private signing kit stays outside the public source. Future updates must retain that key and increase `versionCode`. Version 2.1 uses package `app.cadence.player`, version code `7`.
 
 ## Play Protect
 
-The reported message asks to scan an **unknown app**. It is not caused by a missing signing file in the source package. Allow Google's **Scan app** check and follow its result. A signing key, release build or source audit cannot guarantee Google's verdict. No Google approval is claimed; do not disable Play Protect to suppress a warning.
+Google may ask to scan an unknown sideloaded app. A signing key or release build cannot guarantee Google's verdict. Allow Google's scan and follow its result. No Play Protect approval is claimed.
 
-The release is non-debuggable, uses standard APK signing, targets API 35, disables cleartext traffic and requests only internet/network status, wake lock, media-playback foreground service and notifications. No accessibility, SMS, contacts, overlays or app-install permissions.
-
-Guidance: https://developers.google.com/android/play-protect/warning-dev-guidance
-Signing: https://developer.android.com/studio/publish/app-signing
+The release is non-debuggable, targets API 35, uses APK v2/v3 signing and disables cleartext traffic. WorkManager adds boot recovery and Google's credential libraries declare system biometric permissions; Cadence does not request contacts, SMS, overlays, accessibility or app-install permissions.
 
 ## Build
 
@@ -82,4 +72,4 @@ CI can build an unsigned release without a private key:
 
 An unsigned APK must be signed before installing. A debug APK cannot update a release-signed installation.
 
-GPL-3.0-or-later. See COPYING and THIRD_PARTY_NOTICES.md. The downloadable source archive includes corresponding NewPipeExtractor source in vendor/sources. Live streaming and device-specific behaviour require phone checks. VERIFICATION.md records only checks actually run on 2.0.1; VERIFICATION-2.0.md records the earlier release.
+GPL-3.0-or-later. See COPYING and THIRD_PARTY_NOTICES.md. The downloadable source archive includes corresponding NewPipeExtractor source in vendor/sources. Live streaming and device-specific behaviour require phone checks. VERIFICATION.md records the 2.1 checks; VERIFICATION-2.0.1.md and VERIFICATION-2.0.md retain the earlier reports.
