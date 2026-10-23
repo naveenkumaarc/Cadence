@@ -4,7 +4,7 @@ Native Android music and podcast player, Android 8 or newer. Charcoal Material-s
 
 ## Download APK
 
-[**Download Cadence 2.0 for Android**](https://raw.githubusercontent.com/naveenkumaarc/MusicApp/main/downloads/Cadence-2.0.apk)
+[**Download Cadence 2.0 for Android**](https://raw.githubusercontent.com/naveenkumaarc/Cadence/main/downloads/Cadence-2.0.apk)
 
 Signed release APK · 6.14 MB · Android 8 or newer. The APK is also in [downloads/](downloads/). [SHA-256 checksum](downloads/SHA256SUMS.txt).
 

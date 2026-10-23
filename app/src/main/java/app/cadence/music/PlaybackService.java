@@ -76,6 +76,8 @@ public final class PlaybackService extends MediaLibraryService {
   @Override
   public void onCreate() {
     super.onCreate();
+    // Keep paused playback eligible for foreground resumption for Media3's bounded grace period.
+    setForegroundServiceTimeoutMs(DEFAULT_FOREGROUND_SERVICE_TIMEOUT_MS);
     savedQueue = new android.util.AtomicFile(new java.io.File(getFilesDir(), "queue.json"));
     try {
       podcasts = PodcastStore.get(this);
@@ -274,6 +276,20 @@ public final class PlaybackService extends MediaLibraryService {
                           new androidx.media3.session.SessionResult(
                               androidx.media3.session.SessionError.ERROR_BAD_VALUE));
                     }
+                  }
+
+                  @Override
+                  public ListenableFuture<MediaSession.MediaItemsWithStartPosition> onPlaybackResumption(
+                      MediaSession mediaSession, MediaSession.ControllerInfo controller) {
+                    // onCreate restores the saved queue, position, shuffle, repeat and podcast speed.
+                    // Also serve this snapshot to Android's media resumption controls without playing
+                    // until Media3 receives an explicit Play command.
+                    java.util.ArrayList<MediaItem> items = new java.util.ArrayList<>();
+                    for (int i = 0; i < player.getMediaItemCount(); i++) items.add(player.getMediaItemAt(i));
+                    if (items.isEmpty()) return Futures.immediateFailedFuture(
+                        new IllegalStateException("No saved playback to resume"));
+                    return Futures.immediateFuture(new MediaSession.MediaItemsWithStartPosition(
+                        items, player.getCurrentMediaItemIndex(), Math.max(0, player.getCurrentPosition())));
                   }
 
                   @Override
@@ -528,9 +544,9 @@ public final class PlaybackService extends MediaLibraryService {
   @Override
   public void onTaskRemoved(Intent rootIntent) {
     saveProgress(false); saveQueue();
-    if (!player.getPlayWhenReady()
+    if (!isPlaybackOngoing()
         || player.getMediaItemCount() == 0
-        || player.getPlaybackState() == Player.STATE_ENDED) stopSelf();
+        || player.getPlaybackState() == Player.STATE_ENDED) pauseAllPlayersAndStopSelf();
   }
 
   @Override

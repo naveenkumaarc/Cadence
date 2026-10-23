@@ -6,8 +6,8 @@ android {
         applicationId 'app.cadence.player'
         minSdk 26
         targetSdk 35
-        versionCode 5
-        versionName '2.0'
+        versionCode 6
+        versionName '2.0.1'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     signingConfigs {
@@ -35,9 +35,9 @@ android {
 dependencies {
     implementation project(':core')
     implementation 'androidx.core:core:1.15.0'
-    implementation 'androidx.media3:media3-exoplayer:1.5.1'
-    implementation 'androidx.media3:media3-session:1.5.1'
-    implementation 'androidx.media3:media3-datasource-okhttp:1.5.1'
+    implementation 'androidx.media3:media3-exoplayer:1.8.0'
+    implementation 'androidx.media3:media3-session:1.8.0'
+    implementation 'androidx.media3:media3-datasource-okhttp:1.8.0'
     implementation 'androidx.concurrent:concurrent-futures:1.2.0'
     androidTestImplementation 'androidx.test:runner:1.6.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'

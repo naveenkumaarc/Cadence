@@ -77,15 +77,7 @@ public class PlayerIntegrationTest {
     try (FileOutputStream out = new FileOutputStream(wave)) {
       out.write(buffer.array());
     }
-    main(
-        () ->
-            pending =
-                new MediaController.Builder(
-                        context,
-                        new SessionToken(
-                            context, new ComponentName(context, PlaybackService.class)))
-                    .buildAsync());
-    controller = pending.get(20, TimeUnit.SECONDS);
+    connectController();
     Preferences.get(context).edit().putInt("crossfade",0).commit();
     main(
         () -> {
@@ -96,11 +88,42 @@ public class PlayerIntegrationTest {
         });
   }
 
+  private void connectController() throws Exception {
+    main(() -> pending = new MediaController.Builder(context,
+        new SessionToken(context, new ComponentName(context, PlaybackService.class))).buildAsync());
+    controller = pending.get(20, TimeUnit.SECONDS);
+  }
+
+  @SuppressWarnings("deprecation")
+  private android.app.ActivityManager.RunningServiceInfo playbackService() {
+    var manager = (android.app.ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+    for (var service : manager.getRunningServices(Integer.MAX_VALUE))
+      if (service.service.getClassName().equals(PlaybackService.class.getName())) return service;
+    return null;
+  }
+
+  private void headsetPlay() {
+    var manager = (android.media.AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+    manager.dispatchMediaKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN,
+        android.view.KeyEvent.KEYCODE_MEDIA_PLAY));
+    manager.dispatchMediaKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_UP,
+        android.view.KeyEvent.KEYCODE_MEDIA_PLAY));
+  }
+
+  private void stopDisconnectedService() throws Exception {
+    main(() -> MediaController.releaseFuture(pending));
+    until(() -> !controller.isConnected());
+    pending = null;
+    controller = null;
+    context.stopService(new android.content.Intent(context, PlaybackService.class));
+    until(() -> playbackService() == null);
+  }
+
   @After
   public void close() {
     main(
         () -> {
-          if (controller != null) {
+          if (controller != null && controller.isConnected()) {
             controller.pause();
             controller.clearMediaItems();
           }
@@ -360,6 +383,94 @@ public class PlayerIntegrationTest {
       until(()->!controller.getPlayWhenReady());
     } finally {manager.abandonAudioFocusRequest(request);}
     until(()->controller.isPlaying());
+  }
+
+  @Test
+  public void pausedPodcastStaysForegroundBeyondThirtySecondsAndHeadsetResumes() throws Exception {
+    MediaItem episode = item("Paused podcast");
+    main(() -> {controller.setMediaItem(episode); controller.prepare(); controller.play();});
+    until(() -> controller.isPlaying() && controller.getCurrentPosition() > 500);
+    main(() -> {controller.seekTo(8000); controller.pause();});
+    until(() -> playbackService() != null && playbackService().foreground);
+    Thread.sleep(35000);
+    main(() -> {
+      assertTrue("Paused service must retain foreground grace", playbackService().foreground);
+      assertFalse(controller.getPlayWhenReady());
+      assertEquals(8000, controller.getCurrentPosition(), 200);
+    });
+    headsetPlay();
+    until(() -> controller.isPlaying() && controller.getCurrentPosition() > 8200);
+  }
+
+  @Test
+  public void permanentFocusLossKeepsMusicQueueForManualHeadsetResume() throws Exception {
+    MediaItem song = music("Other app audio");
+    main(() -> {controller.setMediaItem(song); controller.prepare(); controller.play();});
+    until(() -> controller.isPlaying() && controller.getCurrentPosition() > 500);
+    var manager = (android.media.AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+    var request = new android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
+        .setAudioAttributes(new android.media.AudioAttributes.Builder()
+            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MOVIE).build())
+        .setOnAudioFocusChangeListener(change -> {}, new android.os.Handler(android.os.Looper.getMainLooper())).build();
+    try {
+      assertEquals(android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED, manager.requestAudioFocus(request));
+      until(() -> !controller.getPlayWhenReady());
+      Thread.sleep(35000);
+      main(() -> {
+        assertTrue("Audio focus loss must keep the resume grace", playbackService().foreground);
+        assertEquals("Other app audio", String.valueOf(controller.getMediaMetadata().title));
+        assertEquals(1, controller.getMediaItemCount());
+      });
+    } finally { manager.abandonAudioFocusRequest(request); }
+    main(() -> assertFalse("Permanent focus loss must not auto-resume over another app", controller.getPlayWhenReady()));
+    headsetPlay();
+    until(() -> controller.isPlaying());
+  }
+
+  @Test
+  public void headsetPlayRestartsDestroyedServiceAtSavedPodcastPosition() throws Exception {
+    List<MediaItem> queue = List.of(item("Cold A"), item("Cold B"));
+    main(() -> {
+      controller.setMediaItems(queue, 1, 10000); controller.setRepeatMode(Player.REPEAT_MODE_ALL);
+      controller.prepare(); controller.play(); controller.setPlaybackSpeed(1.5f);
+    });
+    until(() -> controller.isPlaying() && controller.getCurrentPosition() > 10500);
+    main(() -> controller.pause());
+    File saved = new File(context.getFilesDir(), "queue.json");
+    until(() -> {
+      var state = new org.json.JSONObject(new String(new android.util.AtomicFile(saved).readFully(), StandardCharsets.UTF_8));
+      return state.getInt("index") == 1 && state.getLong("position") >= 10500;
+    });
+    stopDisconnectedService();
+    // Dispatch through Android's media-button routing; no Activity or controller is open.
+    headsetPlay();
+    until(() -> playbackService() != null && playbackService().foreground);
+    connectController();
+    until(() -> controller.isPlaying());
+    main(() -> {
+      assertEquals(2, controller.getMediaItemCount());
+      assertEquals(1, controller.getCurrentMediaItemIndex());
+      assertEquals("Cold B", String.valueOf(controller.getMediaMetadata().title));
+      assertTrue(controller.getCurrentPosition() >= 10500);
+      assertEquals(Player.REPEAT_MODE_ALL, controller.getRepeatMode());
+      assertEquals(1.5f, controller.getPlaybackParameters().speed, .01f);
+    });
+  }
+
+  @Test
+  public void emptyHistoryDoesNotStartForegroundServiceFromHeadset() throws Exception {
+    File saved = new File(context.getFilesDir(), "queue.json");
+    until(() -> saved.exists() && new org.json.JSONObject(new String(
+        new android.util.AtomicFile(saved).readFully(), StandardCharsets.UTF_8)).getJSONArray("items").length() == 0);
+    stopDisconnectedService();
+    var event = new android.content.Intent(android.content.Intent.ACTION_MEDIA_BUTTON)
+        .setComponent(new ComponentName(context, PlaybackButtonReceiver.class))
+        .putExtra(android.content.Intent.EXTRA_KEY_EVENT, new android.view.KeyEvent(
+            android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MEDIA_PLAY));
+    context.sendBroadcast(event);
+    Thread.sleep(1500);
+    main(() -> assertNull(playbackService()));
   }
 
   @Test

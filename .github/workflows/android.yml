@@ -9,6 +9,14 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - api: 30
+            target: default
+          - api: 35
+            target: google_apis
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -30,8 +38,8 @@ jobs:
       - name: Native Android tests
         uses: ReactiveCircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808
         with:
-          api-level: 30
-          target: default
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.target }}
           arch: x86_64
           profile: pixel_5
           disable-animations: true
@@ -40,7 +48,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Cadence-2.0-build
+          name: Cadence-2.0.1-api-${{ matrix.api }}
           retention-days: 7
           path: |
             app/build/outputs/apk/

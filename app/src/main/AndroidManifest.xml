@@ -8,6 +8,9 @@
     <application android:label="Cadence" android:theme="@style/AppTheme" android:icon="@mipmap/ic_launcher"
         android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="false">
         <meta-data android:name="com.google.android.gms.car.application" android:resource="@xml/automotive_app_desc" />
+        <receiver android:name=".PlaybackButtonReceiver" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.MEDIA_BUTTON" /></intent-filter>
+        </receiver>
         <receiver android:name=".CadenceWidget" android:exported="false" android:label="Cadence">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/cadence_widget" />
