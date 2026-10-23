@@ -111,8 +111,8 @@ final class SongDownloads {
   void start(Track track) throws Exception {
     synchronized (this) { State state = state(track); if (state.active || state.complete) return; }
     if (track.podcast) throw new IOException("Use the episode download control for podcasts.");
-    YouTube.Resolved resolved = YouTube.resolve(track.sourceUrl);
     Track copy = Library.decode(Library.encode(track));
+    YouTube.Resolved resolved = YouTube.resolve(copy.sourceUrl);
     if (resolved.track.durationSeconds > 0) copy.durationSeconds = resolved.track.durationSeconds;
     startResolved(copy, resolved.streamUrl, resolved.mimeType);
   }
