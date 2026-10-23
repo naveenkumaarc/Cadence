@@ -2,6 +2,14 @@
 
 Native Android music and podcast player, Android 8 or newer. Charcoal Material-style surfaces, soft mint accents, rounded cards and native Media3 playback.
 
+## Download APK
+
+[**Download Cadence 2.0 for Android**](https://raw.githubusercontent.com/naveenkumaarc/MusicApp/main/downloads/Cadence-2.0.apk)
+
+Signed release APK · 6.14 MB · Android 8 or newer. The APK is also in [downloads/](downloads/). [SHA-256 checksum](downloads/SHA256SUMS.txt).
+
+**Using 0.3.1? Save and verify a backup in the old app before uninstalling.** This release uses a new signing key and cannot install over 0.3.1. Follow the migration steps below to restore your library. Google may still request an unknown-app scan.
+
 ## Read before installing
 
 The original 0.3.1 private signing key was not supplied and is not in the source ZIP. Its public certificate is in the APK, but the private key cannot be recovered from it. A new key cannot replace an installed app signed with the missing old key.
