@@ -124,7 +124,10 @@ public class PlayerIntegrationTest {
     for (int i=0; i<100 && !released; i++) {
       try (var input = new android.os.ParcelFileDescriptor.AutoCloseInputStream(
           automation.executeShellCommand("dumpsys media_session"))) {
-        released = !new String(input.readAllBytes(), StandardCharsets.UTF_8)
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        byte[] buffer = new byte[4096]; int count;
+        while ((count = input.read(buffer)) != -1) bytes.write(buffer, 0, count);
+        released = !new String(bytes.toByteArray(), StandardCharsets.UTF_8)
             .contains(context.getPackageName() + "/androidx.media3.session.id.");
       }
       if (!released) Thread.sleep(100);
