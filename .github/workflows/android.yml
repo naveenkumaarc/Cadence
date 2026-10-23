@@ -19,7 +19,10 @@ jobs:
           java-version: '17'
           cache: gradle
       - name: Install Android SDK 35
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          log-accepted-android-sdk-licenses: false
       - name: Build and check unsigned release and test APKs
         run: ./gradlew --no-daemon -PcadenceUnsigned :core:test :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease :app:lintRelease
       - name: Enable emulator acceleration
