@@ -104,7 +104,8 @@ public class RedesignIntegrationTest {
         row.performClick(); assertFalse(Preferences.get(context).getBoolean("autoplay",true));
       });
       screenshot("settings");
-      File wave = new File(context.getFilesDir(), "redesign-test.wav");
+      File wave = new File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_PODCASTS), "redesign-test.wav");
+      wave.getParentFile().mkdirs();
       int samples = 44100*20;
       ByteBuffer buffer=ByteBuffer.allocate(44+samples*2).order(ByteOrder.LITTLE_ENDIAN);
       buffer.put("RIFF".getBytes(StandardCharsets.US_ASCII)).putInt(36+samples*2)
