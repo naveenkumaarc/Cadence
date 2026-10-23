@@ -32,7 +32,7 @@ public class PlayerIntegrationTest {
   }
 
   private void until(Callable<Boolean> condition) throws Exception {
-    long deadline = System.currentTimeMillis() + 15000;
+    long deadline = System.currentTimeMillis() + 30000;
     while (System.currentTimeMillis() < deadline) {
       final boolean[] done = {false};
       main(

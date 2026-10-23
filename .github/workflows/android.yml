@@ -35,10 +35,7 @@ jobs:
           arch: x86_64
           profile: pixel_5
           disable-animations: true
-          script: |
-            ./gradlew --no-daemon :app:connectedDebugAndroidTest
-            mkdir -p artifacts/screenshots
-            adb pull /sdcard/Android/data/app.cadence.player/files/ artifacts/screenshots/
+          script: bash tools/run-native-checks.sh
       - name: Save APKs, reports and screen captures
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

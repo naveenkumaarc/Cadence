@@ -137,14 +137,32 @@ public class RedesignIntegrationTest {
       });
       screenshot("player");
       Podcasts.Show show=new Podcasts.Show();show.title="Wild South Raiders Podcast";show.feedUrl="https://example.org/test-feed";
-      for(int i=0;i<3;i++) { Podcasts.Episode e=new Podcasts.Episode();e.id="redesign-episode-"+i;e.title=i==0?"A conversation worth listening to":"Another story · Episode "+i;e.show=show.title;e.audioUrl=wave.toURI().toString();e.duration=20;show.episodes.add(e); }
+      for(int i=0;i<3;i++) {
+        File audio=new File(wave.getParentFile(),"redesign-podcast-"+i+".wav");
+        java.nio.file.Files.copy(wave.toPath(),audio.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        Podcasts.Episode e=new Podcasts.Episode();e.id="redesign-episode-"+i;
+        e.title=i==0?"A conversation worth listening to":"Another story · Episode "+i;
+        e.show=show.title;e.audioUrl=audio.toURI().toString();e.duration=20;show.episodes.add(e);
+      }
       PodcastStore.get(context).preview(show);
       onMain(() -> {
         Method mediaItem=MainActivity.class.getDeclaredMethod("mediaItem",Track.class);mediaItem.setAccessible(true);
         controller[0].setMediaItem((androidx.media3.common.MediaItem)mediaItem.invoke(activity,show.episodes.get(0).track()));
-        controller[0].prepare(); call(activity,"updatePlayer");
+        controller[0].prepare();
+      });
+      boolean[] podcastReady={false};
+      for(int i=0;i<300 && !podcastReady[0];i++) {
+        onMain(() -> {
+          call(activity,"updatePlayer");
+          podcastReady[0]="PLAYING FROM PODCAST".contentEquals(((TextView)field(activity,"playerContext")).getText());
+        });
+        Thread.sleep(100);
+      }
+      assertTrue("Podcast metadata must reach the controller",podcastReady[0]);
+      onMain(() -> {
         assertEquals("PLAYING FROM PODCAST",((TextView)field(activity,"playerContext")).getText().toString());
         assertNotNull(findText((View)field(activity,"playerRelated"),"More episodes & podcasts"));
+        assertNotNull(findText((View)field(activity,"playerRelated"),"Another story · Episode 1"));
         assertEquals(View.GONE,((View)field(activity,"playerPrevious")).getVisibility());
       });
       screenshot("podcast-player");
