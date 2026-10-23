@@ -159,12 +159,13 @@ public class RedesignIntegrationTest {
         java.nio.file.Files.copy(wave.toPath(),audio.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         Podcasts.Episode e=new Podcasts.Episode();e.id="redesign-episode-"+i;
         e.title=i==0?"A conversation worth listening to":"Another story · Episode "+i;
-        e.show=show.title;e.audioUrl=audio.toURI().toString();e.duration=20;show.episodes.add(e);
+        e.show=show.title;e.audioUrl="https://example.org/redesign-podcast-"+i+".wav";e.duration=20;show.episodes.add(e);
       }
       PodcastStore.get(context).preview(show);
       onMain(() -> {
         Method mediaItem=MainActivity.class.getDeclaredMethod("mediaItem",Track.class);mediaItem.setAccessible(true);
-        controller[0].setMediaItem((androidx.media3.common.MediaItem)mediaItem.invoke(activity,show.episodes.get(0).track()));
+        androidx.media3.common.MediaItem podcastItem=(androidx.media3.common.MediaItem)mediaItem.invoke(activity,show.episodes.get(0).track());
+        controller[0].setMediaItem(podcastItem.buildUpon().setUri(new File(wave.getParentFile(),"redesign-podcast-0.wav").toURI().toString()).build());
         controller[0].prepare();
       });
       boolean[] podcastReady={false};

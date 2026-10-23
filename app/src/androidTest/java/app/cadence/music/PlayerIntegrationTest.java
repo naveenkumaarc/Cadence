@@ -209,7 +209,9 @@ public class PlayerIntegrationTest {
           controller.play();
           controller.setPlaybackSpeed(1.5f);
         });
-    until(() -> controller.isPlaying() && controller.getCurrentPosition() > 1000);
+    // The controller estimates position across processes; leave room before
+    // checking the decoder's checkpoint at the one-second boundary.
+    until(() -> controller.isPlaying() && controller.getCurrentPosition() > 1500);
     main(() -> controller.pause());
     until(() -> PodcastStore.get(context).progress("test:Progress") >= 1000);
     assertEquals(
