@@ -3055,7 +3055,10 @@ public final class MainActivity extends Activity {
       for(int i=0;i<items.length();i++) { Track track=Library.decode(items.getJSONObject(i)); if(track.sourceUrl.startsWith("https://")) { if(i<=saved.optInt("index")) start=queue.size(); queue.add(mediaItem(track)); } }
       if(queue.isEmpty()) { toast("This queue has no available online tracks."); return; }
       controller.setMediaItems(queue,Math.min(start,queue.size()-1),Math.max(0,saved.optLong("position")));
-      controller.setShuffleModeEnabled(saved.optBoolean("shuffle")); int repeat=saved.optInt("repeat"); controller.setRepeatMode(repeat>=0 && repeat<=2?repeat:0);
+      controller.setShuffleModeEnabled(saved.optBoolean("shuffle")); int repeat=saved.optInt("repeat");
+      if(repeat==Player.REPEAT_MODE_ONE) controller.setRepeatMode(Player.REPEAT_MODE_ONE);
+      else if(repeat==Player.REPEAT_MODE_ALL) controller.setRepeatMode(Player.REPEAT_MODE_ALL);
+      else controller.setRepeatMode(Player.REPEAT_MODE_OFF);
       controller.prepare(); controller.play(); openPlayer();
     } catch(Exception e) { error("Saved queue",e); }
   }

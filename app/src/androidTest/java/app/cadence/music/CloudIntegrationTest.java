@@ -16,14 +16,19 @@ import java.util.*;
 public final class CloudIntegrationTest {
   private Context context;
   private JSONObject saved;
+  private java.util.Map<String,?> account;
   private void main(Runnable task) { InstrumentationRegistry.getInstrumentation().runOnMainSync(task); }
   private void checked(Callable task) { main(()-> { try { task.run(); } catch(Exception e) { throw new RuntimeException(e); } }); }
   private interface Callable { void run() throws Exception; }
   @Before public void before() throws Exception {
     context=InstrumentationRegistry.getInstrumentation().getTargetContext();
-    checked(()-> { saved=CloudData.snapshot(context); CloudData.apply(context,new JSONObject(),false); });
+    checked(()-> { account=CloudSync.prefs(context).getAll(); CloudSync.prefs(context).edit().clear().commit(); saved=CloudData.localSnapshot(context); CloudData.apply(context,new JSONObject(),false); });
   }
-  @After public void after() { checked(()->CloudData.apply(context,saved,false)); }
+  @After public void after() { checked(()-> {
+    CloudSync.prefs(context).edit().clear().commit(); CloudData.applyLocal(context,saved);
+    var edit=CloudSync.prefs(context).edit();
+    for(var entry:account.entrySet()) { Object value=entry.getValue();if(value instanceof String s) edit.putString(entry.getKey(),s);else if(value instanceof Boolean b) edit.putBoolean(entry.getKey(),b);else if(value instanceof Long n) edit.putLong(entry.getKey(),n);else if(value instanceof Integer n) edit.putInt(entry.getKey(),n); }edit.commit();
+  }); }
   private Track song(String id) { return new Track("Synthetic "+id,"Synthetic artist","https://www.youtube.com/watch?v="+id,"",180); }
 
   @Test public void twoDeviceMergePreservesChosenVersionsAndDeletions() {
@@ -87,6 +92,31 @@ public final class CloudIntegrationTest {
       assertFalse(PlaylistDownloads.hasPending(context));assertEquals(0,PlaylistDownloads.summary(context,p.id).active());
       assertEquals(1,DownloadList.playlist(context).tracks.size());
       androidx.work.WorkManager.getInstance(context).cancelUniqueWork("cadence-playlist-downloads");
+    });
+  }
+  @Test public void accountSwitchKeepsLibrariesAndCustomProfilesSeparate() {
+    checked(()-> {
+      Library library=new Library(context);Library.Playlist p=new Library.Playlist("Account A local library");p.id="account-a-private";
+      p.tracks.add(new Track("Phone file","Synthetic artist","file:///synthetic-local-only.wav","",15));library.playlists.add(p);library.save();
+      CloudSync.activate(context,"synthetic-account-a","a@example.com","Google A","",true);
+      JsonDisk.write(context,"cloud-profile.json",new JSONObject().put("name","Cadence A"));DownloadList.remember(context,song("account0001"));
+      CloudSync.signOut(context);CloudSync.activate(context,"synthetic-account-b","b@example.com","Google B","",false);
+      assertFalse(new Library(context).playlists.stream().anyMatch(x->x.id.equals(p.id)));assertEquals(0,DownloadList.playlist(context).tracks.size());
+      assertFalse(JsonDisk.read(context,"cloud-profile.json").has("name"));
+      CloudSync.activate(context,"synthetic-account-a","a@example.com","Google A","",false);
+      Track restored=new Library(context).playlists.stream().filter(x->x.id.equals(p.id)).findFirst().orElseThrow().tracks.get(0);
+      assertEquals("file:///synthetic-local-only.wav",restored.sourceUrl);assertEquals("Cadence A",JsonDisk.read(context,"cloud-profile.json").getString("name"));
+      assertFalse(CloudData.snapshot(context).toString().contains("synthetic-local-only.wav"));
+    });
+  }
+  @Test public void interruptedCloudApplyRecoversDeviceOnlyTracksFromJournal() {
+    checked(()-> {
+      Library library=new Library(context);Library.Playlist p=new Library.Playlist("Local recovery");p.id="phone-only-recovery";
+      p.tracks.add(new Track("Phone file","Synthetic artist","file:///recover-only-on-this-phone.wav","",15));library.playlists.add(p);library.save();
+      JSONObject before=CloudData.localSnapshot(context);CloudData.apply(context,new JSONObject(),false);
+      JsonDisk.write(context,"cloud-apply-journal.json",new JSONObject().put("pending",true).put("before",before));CloudData.recoverPending(context);
+      assertEquals("file:///recover-only-on-this-phone.wav",new Library(context).playlists.stream().filter(x->x.id.equals(p.id)).findFirst().orElseThrow().tracks.get(0).sourceUrl);
+      assertFalse(JsonDisk.read(context,"cloud-apply-journal.json").getBoolean("pending"));
     });
   }
 }
