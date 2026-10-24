@@ -87,6 +87,9 @@ public final class DeviceContinuityIntegrationTest {
     CloudData.apply(context,CloudSync.libraryData(old));assertEquals(1200000,PodcastPositions.latest(context,"older-app-episode").position());
     assertEquals("old-phone",PodcastPositions.latest(context,"older-app-episode").device());assertEquals(old.changedAt(key),PodcastPositions.latest(context,"older-app-episode").updated());
     assertEquals(1,PodcastPositions.choices(context,"older-app-episode").size());
+    JSONObject existing=CloudData.snapshot(context);progress.addProperty("position",2700000);old.capture(snapshot);JSONObject later=CloudSync.libraryData(old);
+    for(java.util.Iterator<String> it=existing.keys();it.hasNext();) {String k=it.next();if(k.startsWith("device-progress/"))later.put(k,existing.get(k));}
+    CloudData.apply(context,later);assertEquals(2700000,PodcastPositions.choices(context,"older-app-episode").get(0).position());
   });}
   @Test public void nativePickersShowDeviceNamesFullDatesAndIndependentPositions() throws Exception {
     var instrumentation=InstrumentationRegistry.getInstrumentation();

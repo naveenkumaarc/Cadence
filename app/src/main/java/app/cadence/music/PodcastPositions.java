@@ -84,7 +84,8 @@ final class PodcastPositions {
     }
     for(Iterator<String> it=latest.keys();it.hasNext();) {
       Position p=parse(latest.getJSONObject(it.next()));String key=JsonDisk.hash(p.id)+"/"+p.device;
-      if(!p.device.isEmpty() && p.updated>0 && !devices.has(key))devices.put(key,p.json());
+      JSONObject existing=devices.optJSONObject(key);
+      if(!p.device.isEmpty() && p.updated>0 && (existing==null || p.name.equals("Earlier Cadence device") && p.updated>existing.optLong("updated")))devices.put(key,p.json());
     }
     return new JSONObject().put("latest",latest).put("devices",devices);
   }
@@ -98,7 +99,7 @@ final class PodcastPositions {
     for(Iterator<String> it=current.keys();it.hasNext();) {String key=it.next();if(key.startsWith("device-progress/") && !result.has(key))result.put(key,current.get(key));}
     long now=System.currentTimeMillis();
     for(Iterator<String> it=current.keys();it.hasNext();) {String key=it.next();if(key.startsWith("progress/") || key.startsWith("device-progress/")) now=Math.max(now,current.getJSONObject(key).optLong("updated")+1);}
-    for(Iterator<String> it=result.keys();it.hasNext();) {String key=it.next();if(key.startsWith("progress/")) {JSONObject p=new JSONObject(result.getJSONObject(key).toString());p.put("updated",now);result.put(key,p);}}
+    for(Iterator<String> it=result.keys();it.hasNext();) {String key=it.next();if(key.startsWith("progress/")) {JSONObject p=new JSONObject(result.getJSONObject(key).toString());String name="Restored backup · "+p.optString("name","Earlier Cadence progress");p.put("updated",now).put("name",name.substring(0,Math.min(160,name.length())));result.put(key,p);}}
     prepare(result);return result;
   }
   static synchronized void restoreBackup(Context c,JSONObject saved,JSONObject legacy) throws Exception {
