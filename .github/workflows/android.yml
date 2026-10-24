@@ -56,3 +56,4 @@ jobs:
             app/build/outputs/androidTest-results/
             core/build/test-results/
             artifacts/media-logcat.txt
+            artifacts/*.png

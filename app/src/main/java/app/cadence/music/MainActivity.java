@@ -2287,7 +2287,7 @@ public final class MainActivity extends Activity {
           PodcastPositions.mode(this,n==1);d.dismiss();showProfile();
         }).setNegativeButton("Cancel",null).show();
   }
-  private void chooseEpisodePosition(Podcasts.Episode e) {
+  private AlertDialog chooseEpisodePosition(Podcasts.Episode e) {
     var latest=PodcastPositions.latest(this,e.id);var own=PodcastPositions.device(this,e.id);
     java.util.List<PodcastPositions.Position> options=new java.util.ArrayList<>();options.add(latest);options.add(own);
     for(var p:PodcastPositions.choices(this,e.id)) if(!p.device().equals(own.device()))options.add(p);
@@ -2296,7 +2296,7 @@ public final class MainActivity extends Activity {
       var p=options.get(i);String name=i==0?"Continue from latest · "+p.name():i==1?"This device · "+BackupLabels.deviceName(this):p.name();
       labels[i]=name+"\n"+(p.done()?"Played":episodeProgressLabel(p.position(),e.duration))+"\n"+(p.updated()>0?BackupLabels.date(p.updated()):"No dated activity saved");
     }
-    new AlertDialog.Builder(this).setTitle("Choose listening position").setItems(labels,(d,n)-> {
+    return new AlertDialog.Builder(this).setTitle("Choose listening position").setAdapter(namedChoices(labels),(d,n)-> {
       var selected=options.get(n);
       try {
         if(controller!=null && currentTrack()!=null && currentTrack().podcast && currentTrack().episodeId.equals(e.id)) controller.pause();
@@ -3093,16 +3093,27 @@ public final class MainActivity extends Activity {
               CloudSync.prefs(this).edit().putBoolean("chooseBackup",false).apply();CloudSync.periodic(this);CloudSync.syncNow(this);showProfile();
             }).show();return;
       }
-      String[] labels=new String[copies.size()];for(int i=0;i<labels.length;i++)labels[i]=BackupLabels.cloud(copies.get(i));
-      new AlertDialog.Builder(this).setTitle("Choose backup to restore").setItems(labels,(d,n)-> {
-        org.json.JSONObject copy=copies.get(n);
-        new AlertDialog.Builder(this).setTitle("Restore selected backup?").setMessage(BackupLabels.cloud(copy)+"\n\nThis restores the selected library version. Device listening histories are kept. A recovery copy of this phone’s current library is saved first.")
-            .setNegativeButton("Cancel",null).setPositiveButton("Restore this backup",(dialog,which)-> {
-              if(controller!=null) {controller.pause();controller.clearMediaItems();}
-              work("Restoring selected backup…",()-> {CloudSync.restore(this,copy.getString("id"));return true;},ignored->{showProfile();toast("Selected backup restored");});
-            }).show();
-      }).setNegativeButton("Cancel",null).show();
+      showBackupChoices(copies);
     });
+  }
+  private android.widget.ArrayAdapter<String> namedChoices(String[] labels) {
+    return new android.widget.ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,labels) {
+      @Override public View getView(int position,View convert,android.view.ViewGroup parent) {
+        TextView label=(TextView)super.getView(position,convert,parent);label.setSingleLine(false);label.setMaxLines(7);
+        label.setTextSize(14);label.setTextColor(INK);label.setPadding(dp(20),dp(14),dp(20),dp(14));return label;
+      }
+    };
+  }
+  private AlertDialog showBackupChoices(java.util.List<org.json.JSONObject> copies) {
+    String[] labels=new String[copies.size()];for(int i=0;i<labels.length;i++)labels[i]=BackupLabels.cloud(copies.get(i));
+    return new AlertDialog.Builder(this).setTitle("Choose backup to restore").setAdapter(namedChoices(labels),(d,n)-> {
+      org.json.JSONObject copy=copies.get(n);
+      new AlertDialog.Builder(this).setTitle("Restore selected backup?").setMessage(BackupLabels.cloud(copy)+"\n\nThis restores the selected library version. Device listening histories are kept. A recovery copy of this phone’s current library is saved first.")
+          .setNegativeButton("Cancel",null).setPositiveButton("Restore this backup",(dialog,which)-> {
+            if(controller!=null) {controller.pause();controller.clearMediaItems();}
+            work("Restoring selected backup…",()-> {CloudSync.restore(this,copy.getString("id"));return true;},ignored->{showProfile();toast("Selected backup restored");});
+          }).show();
+    }).setNegativeButton("Cancel",null).show();
   }
   private void resumeCloudQueue() {
     if(controller==null) { toast("Wait for the player to connect."); return; }
@@ -3245,3 +3256,4 @@ public final class MainActivity extends Activity {
     return seconds <= 0 ? "0:00" : duration(seconds);
   }
 }
+

@@ -56,6 +56,8 @@ public final class SyncState {
       out.add(entry.getKey(), entry.getValue().value.deepCopy());
     return out;
   }
+  public long changedAt(String key) {Cell cell=cells.get(key);return cell==null?0:cell.clock;}
+  public String changedBy(String key) {Cell cell=cells.get(key);return cell==null?"":cell.actor;}
 
   public String document(boolean local) {
     JsonObject root = new JsonObject(); root.addProperty("format", "cadence.sync"); root.addProperty("version", 1);

@@ -80,4 +80,39 @@ public final class DeviceContinuityIntegrationTest {
     try {CloudData.apply(context,bad);fail("Invalid device accepted");}catch(java.io.IOException expected){}
     assertEquals(before.toString(),CloudData.snapshot(context).toString());
   });}
+  @Test public void syncFromOlderAppUsesItsRecordedDeviceAndChangeTime() {main(()-> {
+    String key="progress/"+JsonDisk.hash("older-app-episode");
+    app.cadence.core.SyncState old=new app.cadence.core.SyncState("old-phone");
+    com.google.gson.JsonObject snapshot=new com.google.gson.JsonObject(),progress=new com.google.gson.JsonObject();progress.addProperty("id","older-app-episode");progress.addProperty("position",1200000);progress.addProperty("done",false);snapshot.add(key,progress);old.capture(snapshot);
+    CloudData.apply(context,CloudSync.libraryData(old));assertEquals(1200000,PodcastPositions.latest(context,"older-app-episode").position());
+    assertEquals("old-phone",PodcastPositions.latest(context,"older-app-episode").device());assertEquals(old.changedAt(key),PodcastPositions.latest(context,"older-app-episode").updated());
+    assertEquals(1,PodcastPositions.choices(context,"older-app-episode").size());
+  });}
+  @Test public void nativePickersShowDeviceNamesFullDatesAndIndependentPositions() throws Exception {
+    var instrumentation=InstrumentationRegistry.getInstrumentation();
+    if(android.os.Build.VERSION.SDK_INT>=33)instrumentation.getUiAutomation().grantRuntimePermission(context.getPackageName(),android.Manifest.permission.POST_NOTIFICATIONS);
+    MainActivity activity=(MainActivity)instrumentation.startActivitySync(new android.content.Intent(context,MainActivity.class).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+    android.app.AlertDialog[] dialog={null};
+    try {
+      main(()-> {
+        CloudSync.prefs(context).edit().putString("device","ui-phone").putString("deviceName","Naveen phone").commit();PodcastStore.get(context).progress("picker-episode",1200000,false);
+        JSONObject snapshot=CloudData.snapshot(context);snapshot.put("device-progress/"+JsonDisk.hash("picker-episode")+"/ui-tablet",row("picker-episode","ui-tablet","Living room tablet",2700000,System.currentTimeMillis()+1000));CloudData.apply(context,snapshot);
+        app.cadence.core.Podcasts.Episode episode=new app.cadence.core.Podcasts.Episode();episode.id="picker-episode";episode.title="Episode 3";episode.show="Podcast";episode.duration=3600;episode.audioUrl="https://example.com/synthetic.mp3";
+        var picker=MainActivity.class.getDeclaredMethod("chooseEpisodePosition",app.cadence.core.Podcasts.Episode.class);picker.setAccessible(true);dialog[0]=(android.app.AlertDialog)picker.invoke(activity,episode);
+        var list=dialog[0].getListView();assertTrue(list.getAdapter().getCount()>=3);String labels="";for(int i=0;i<list.getAdapter().getCount();i++)labels+=list.getAdapter().getItem(i).toString();
+        assertTrue(labels.contains("Continue from latest"));assertTrue(labels.contains("Naveen phone"));assertTrue(labels.contains("Living room tablet"));assertTrue(labels.contains("20 min played"));assertTrue(labels.contains("45 min played"));
+      });
+      instrumentation.waitForIdleSync();try(var out=new java.io.FileOutputStream(new java.io.File(context.getFilesDir(),"continuity-positions.png"))) {instrumentation.getUiAutomation().takeScreenshot().compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}
+      main(()-> {
+        dialog[0].dismiss();java.util.List<JSONObject> copies=new ArrayList<>();
+        copies.add(new JSONObject().put("id","synthetic-current").put("appProperties",new JSONObject().put("deviceName","Naveen phone").put("device","ui-phone").put("cadenceKind","state").put("savedAt","1792828800000")));
+        copies.add(new JSONObject().put("id","synthetic-earlier").put("appProperties",new JSONObject().put("deviceName","Living room tablet").put("device","ui-tablet").put("cadenceKind","history").put("savedAt","1792825200000")));
+        var picker=MainActivity.class.getDeclaredMethod("showBackupChoices",java.util.List.class);picker.setAccessible(true);dialog[0]=(android.app.AlertDialog)picker.invoke(activity,copies);
+        var list=dialog[0].getListView();assertEquals(2,list.getAdapter().getCount());String first=list.getAdapter().getItem(0).toString();assertTrue(first.contains("Naveen phone"));assertTrue(first.contains(BackupLabels.date(1792828800000L)));
+        assertTrue(list.getAdapter().getItem(1).toString().contains("Earlier recovery copy"));
+        android.widget.TextView label=(android.widget.TextView)list.getAdapter().getView(0,null,list);assertTrue(label.getMaxLines()>2);
+      });
+      instrumentation.waitForIdleSync();try(var out=new java.io.FileOutputStream(new java.io.File(context.getFilesDir(),"continuity-backups.png"))) {instrumentation.getUiAutomation().takeScreenshot().compress(android.graphics.Bitmap.CompressFormat.PNG,100,out);}
+    } finally {main(()-> {if(dialog[0]!=null)dialog[0].dismiss();activity.finish();});}
+  }
 }

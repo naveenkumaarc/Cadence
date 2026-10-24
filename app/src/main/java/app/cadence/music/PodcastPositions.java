@@ -82,6 +82,10 @@ final class PodcastPositions {
       JSONObject current=latest.optJSONObject(JsonDisk.hash(p.id));Position old=current==null?null:parse(current);
       if(old==null || p.updated>old.updated || p.updated==old.updated && p.device.compareTo(old.device)>0) latest.put(JsonDisk.hash(p.id),p.json());
     }
+    for(Iterator<String> it=latest.keys();it.hasNext();) {
+      Position p=parse(latest.getJSONObject(it.next()));String key=JsonDisk.hash(p.id)+"/"+p.device;
+      if(!p.device.isEmpty() && p.updated>0 && !devices.has(key))devices.put(key,p.json());
+    }
     return new JSONObject().put("latest",latest).put("devices",devices);
   }
   static synchronized void install(Context c,JSONObject data) throws Exception {

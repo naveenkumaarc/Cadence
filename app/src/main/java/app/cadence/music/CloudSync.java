@@ -97,7 +97,7 @@ final class CloudSync {
     catch(Exception failure) { future.cancel(false); throw failure; }
   }
   static String device(Context c) { return actor(c); }
-  private static String actor(Context c) {
+  private static synchronized String actor(Context c) {
     String actor=prefs(c).getString("device","");
     if(actor.isEmpty()) { actor=UUID.randomUUID().toString(); prefs(c).edit().putString("device",actor).commit(); }
     return actor;
@@ -108,6 +108,13 @@ final class CloudSync {
     return file.length()==0?new SyncState(actor(c)):SyncState.parse(file.toString(),actor(c));
   }
   private static void saveState(Context c,String owner,SyncState state) throws Exception { JsonDisk.write(c,stateName(owner),new JSONObject(state.document(true))); }
+  static JSONObject libraryData(SyncState state) throws Exception {
+    JSONObject data=new JSONObject(state.materialize().toString());
+    for(Iterator<String> it=data.keys();it.hasNext();) {String key=it.next();if(key.startsWith("progress/")) {
+      JSONObject row=data.getJSONObject(key);
+      if(row.optLong("updated")==0)row.put("updated",state.changedAt(key)).put("device",state.changedBy(key)).put("name","Earlier Cadence device");
+    }}return data;
+  }
   private static void requireOwner(Context c,String owner) throws Exception {
     if(Thread.currentThread().isInterrupted() || !enabled(c) || !subject(c).equals(owner) || prefs(c).getBoolean("chooseBackup",false)) throw new CancellationException("Account changed or backup selection pending");
   }
@@ -147,7 +154,7 @@ final class CloudSync {
           state.capture(JsonParser.parseString(CloudData.snapshot(c).toString()).getAsJsonObject());
           saveState(c,owner,state); // Persist unsent local changes before touching the live library.
           for(SyncState other:remote) state.merge(other);
-          CloudData.apply(c,new JSONObject(state.materialize().toString()));
+          CloudData.apply(c,libraryData(state));
           state.applied(JsonParser.parseString(CloudData.snapshot(c).toString()).getAsJsonObject()); saveState(c,owner,state);
           if(onApplied!=null) onApplied.run();
           return state.document(false);
@@ -222,7 +229,7 @@ final class CloudSync {
     String owner=subject(c);boolean phoneCopy=id.equals("local-before-restore");
     JSONObject selectedData;
     if(phoneCopy) selectedData=JsonDisk.read(c,"cloud-before-restore-"+JsonDisk.hash(owner)+".json");
-    else {DriveStore drive=factory.open();drive.verifyAccount(owner);selectedData=new JSONObject(SyncState.parse(drive.read(id),actor(c)).materialize().toString());}
+    else {DriveStore drive=factory.open();drive.verifyAccount(owner);selectedData=libraryData(SyncState.parse(drive.read(id),actor(c)));}
     if(selectedData.length()==0)throw new java.io.IOException("This backup is no longer available.");
     JSONObject picked=selectedData;
     main(()-> {
