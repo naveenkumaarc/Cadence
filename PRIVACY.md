@@ -1,6 +1,6 @@
 # Cadence privacy policy
 
-Effective for Cadence 2.1. Maintainer: Naveen Kumaar. Contact: cnaveenkumaar@gmail.com. Source and support: https://github.com/naveenkumaarc/Cadence.
+Effective for Cadence 2.2. Maintainer: Naveen Kumaar. Contact: cnaveenkumaar@gmail.com. Source and support: https://github.com/naveenkumaarc/Cadence.
 
 Cadence is an Android music and podcast player. It can be used without signing in. Playlists, preferences and listening progress are stored on your phone.
 
@@ -10,7 +10,7 @@ If you choose Google sign-in, Google provides your account identifier, email, na
 
 If you connect Google Drive, Cadence requests `drive.appdata`, limited to its hidden application storage, together with basic identity permissions. Cadence stores playlist metadata and order, favourites, selected song versions, durations, podcast subscriptions and episode metadata, listening progress, playback preferences, the saved queue, your Cadence profile customisations and the list of requested downloads. Profile photos you choose are resized and stored as part of this profile data.
 
-Actual music/podcast files, local file access grants, transfer IDs, device file paths and download-complete flags are not uploaded. A saved download list does not mean that its audio is available on another phone. Account-specific sync documents and recent recovery copies are stored in your Google Drive. Cadence uses a random installation identifier to keep each phone's updates separate. This metadata is private application data in your Google account, not a publicly shared playlist.
+Actual music/podcast files, local file access grants, transfer IDs, device file paths and download-complete flags are not uploaded. A saved download list does not mean that its audio is available on another phone. Account-specific sync documents and recent recovery copies are stored in your Google Drive. Cadence uses a random installation identifier to keep each phone's updates separate. It also stores the device model or the device name you choose, backup timestamps and separate per-device episode positions/timestamps. These labels let you choose a listening position or backup. They do not include a hardware serial number, advertising ID or Bluetooth address. This metadata is private application data in your Google account, not a publicly shared playlist.
 
 Google credentials and consent are handled by Google's official Android components. Cadence does not collect your Google password, store OAuth access tokens on disk, or send your library to a separate Cadence server. Google supplies tokens when needed; they remain in memory for requests to Google's HTTPS APIs. This is not a claim of end-to-end encryption against Google.
 

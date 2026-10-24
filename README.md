@@ -1,14 +1,26 @@
-# Cadence 2.1
+# Cadence 2.2
 
 Android music and podcast player, Android 8 or newer. Dark Material-style surfaces, rounded cards, native Media3 playback and optional Google Drive continuity.
 
 ## Download
 
-[**Download Cadence 2.1 APK**](https://github.com/naveenkumaarc/Cadence/releases/download/v2.1/Cadence-2.1.apk) · [Release, source archive and checksums](https://github.com/naveenkumaarc/Cadence/releases/tag/v2.1) · [Homepage](https://naveenkumaarc.github.io/Cadence/)
+[**Download Cadence 2.2 APK**](https://github.com/naveenkumaarc/Cadence/releases/download/v2.2/Cadence-2.2.apk) · [Release, source archive and checksums](https://github.com/naveenkumaarc/Cadence/releases/tag/v2.2) · [Homepage](https://naveenkumaarc.github.io/Cadence/)
 
-**Using Cadence 2.0 or 2.0.1? Install this update over it without uninstalling.** The package and release signing key are retained. An in-place update from 2.0.1 was checked with a synthetic library, subscriptions and two episode positions.
+**Using Cadence 2.0, 2.0.1 or 2.1? Install this update over it without uninstalling.** The package and release signing key are retained. An in-place update from 2.1 was checked with a synthetic library, subscriptions and two episode positions.
 
-## New in 2.1
+## New in 2.2
+
+- Podcast progress keeps an account-wide **Continue from latest** position and independent positions for each device. Change the default under **Profile → Podcast resume**, or use the restore-shaped icon on an episode to choose a particular saved position. Later rewinds count as newer activity; an unchanged paused checkpoint does not take over from another device.
+- **Profile → Choose backup to restore** lists each device's latest cloud copy and earlier recovery copies, with a device name, full date, time and time zone. Select the desired copy and confirm it. A **Before last restore** copy stays on this phone for undo. Restoring a library keeps the other devices' listening records.
+- New sign-ins can choose **Choose cloud backup** before automatic sync begins. Cancelling the picker leaves cloud data unchanged. **Merge this library** remains available for combining an existing phone library with the account.
+- Rename this phone under **Profile → Device name**. Future cloud copies and listening records use that label. Local backup filenames include the device name and date/time; their restore confirmation also shows this metadata.
+- **Sync now** starts a foreground request rather than joining an old retry chain. The profile shows progress, a full last-success timestamp and safe failure details. Background requests are coalesced. A failed optional recovery archive no longer blocks saving the current library.
+
+Previous backups remain readable. Older cloud copies without device metadata are labelled **Earlier Cadence device**, with their recorded file date where available. Earlier episode progress remains the account default; a reinstall has a new installation identity, so **This device** starts separately and the previous installation's record can be chosen explicitly. Device records are private to the signed-in account. Audio files do not sync.
+
+Upgrade every actively used phone to 2.2 for the full device-history experience. [2.2 release notes](RELEASE-NOTES-2.2.md).
+
+## Features retained from 2.1
 
 - Optional Google sign-in, automatic hidden Drive sync and **Sync now**. Profile, playlists, likes, selected CSV song versions and durations, podcast subscriptions, episode progress, playback preferences and the saved queue can continue on another phone.
 - The download request list syncs; actual audio files, device paths, file permissions and completed-download flags stay on each phone. **Downloaded** shows songs available on this phone. **Saved downloads** lets another phone download the requested songs and episodes.
@@ -19,7 +31,7 @@ Android music and podcast player, Android 8 or newer. Dark Material-style surfac
 
 Sign-in stays optional. Tap the profile photo → **Sign in with Google**, choose whether to merge the current phone library, then approve hidden Cadence Drive storage. Use the same Google account on another phone. Changes sync while connected when the app opens and when Android schedules background work; **Sync now** requests an immediate check. Sync does not start remote playback automatically: **Continue listening** explicitly restores the saved queue.
 
-Cloud settings include automatic-sync control, sign-out and recent recovery copies. Local JSON backup/restore remains available. [Privacy policy](https://naveenkumaarc.github.io/Cadence/privacy.html) · [Google configuration for maintainers/forks](GOOGLE-CONFIG.md) · [Release notes](RELEASE-NOTES-2.1.md) · [Verification and limits](VERIFICATION.md).
+Cloud settings include automatic-sync control, sign-out and recent recovery copies. Local JSON backup/restore remains available. [Privacy policy](https://naveenkumaarc.github.io/Cadence/privacy.html) · [Google configuration for maintainers/forks](GOOGLE-CONFIG.md) · [Release notes](RELEASE-NOTES-2.2.md) · [Verification and limits](VERIFICATION.md).
 
 Google Cloud is configured for an External audience with publishing status **In production**, basic profile permissions and the non-sensitive `drive.appdata` scope. Android and Web OAuth clients use the retained release certificate. This configuration is distinct from testing a real account's sign-in and two-phone sync; that live account check still needs to be performed on Google-enabled phones.
 
@@ -38,7 +50,7 @@ The original 0.3.1 private signing key was not supplied. It cannot be recovered 
 3. In Cadence, choose **Settings → Restore backup** and select the JSON. Check your playlists, subscriptions and progress.
 4. Download offline audio again and reselect local files; audio and Android file permissions are not in the backup.
 
-The private signing kit stays outside the public source. Future updates must retain that key and increase `versionCode`. Version 2.1 uses package `app.cadence.player`, version code `7`.
+The private signing kit stays outside the public source. Future updates must retain that key and increase `versionCode`. Version 2.2 uses package `app.cadence.player`, version code `8`.
 
 ## Play Protect
 
@@ -72,4 +84,4 @@ CI can build an unsigned release without a private key:
 
 An unsigned APK must be signed before installing. A debug APK cannot update a release-signed installation.
 
-GPL-3.0-or-later. See COPYING and THIRD_PARTY_NOTICES.md. The downloadable source archive includes corresponding NewPipeExtractor source in vendor/sources. Live streaming and device-specific behaviour require phone checks. VERIFICATION.md records the 2.1 checks; VERIFICATION-2.0.1.md and VERIFICATION-2.0.md retain the earlier reports.
+GPL-3.0-or-later. See COPYING and THIRD_PARTY_NOTICES.md. The downloadable source archive includes corresponding NewPipeExtractor source in vendor/sources. Live streaming and device-specific behaviour require phone checks. VERIFICATION.md records the 2.2 checks; VERIFICATION-2.1.md, VERIFICATION-2.0.1.md and VERIFICATION-2.0.md retain the earlier reports.
