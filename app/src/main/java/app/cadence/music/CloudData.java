@@ -35,10 +35,7 @@ final class CloudData {
     }
     var prefs=Preferences.get(c);
     for(String key:PREFS) if(prefs.contains(key)) out.put("pref/"+key,prefs.getAll().get(key));
-    var progress=c.getSharedPreferences("podcast-progress",0).getAll(); Set<String> ids=new HashSet<>();
-    for(String key:progress.keySet()) ids.add(key.endsWith(".done")?key.substring(0,key.length()-5):key);
-    for(String id:ids) out.put("progress/"+JsonDisk.hash(id),new JSONObject().put("id",id)
-        .put("position",PodcastStore.get(c).progress(id)).put("done",PodcastStore.get(c).completed(id)));
+    PodcastPositions.capture(c,out);
     JSONObject wishes=DownloadList.snapshot(c);
     for(Iterator<String> it=wishes.keys();it.hasNext();) { String key=it.next(); out.put("download/"+key,wishes.getJSONObject(key)); }
     JSONObject profile=JsonDisk.read(c,"cloud-profile.json");
@@ -160,7 +157,8 @@ final class CloudData {
     for(String key:keys) if(key.startsWith("progress/")) {
       JSONObject p=data.getJSONObject(key); if(p.getString("id").isEmpty() || p.getString("id").length()>2048) throw new java.io.IOException("Invalid episode progress.");
     }
-    JsonDisk.write(c,"cloud-recovery-local.json",snapshot(c));
+    JSONObject positions=PodcastPositions.prepare(data);
+    JsonDisk.write(c,"cloud-recovery-local.json",localSnapshot(c));
     android.util.AtomicFile libraryFile=new android.util.AtomicFile(new java.io.File(c.getFilesDir(),"library.json"));
     java.io.FileOutputStream stream=null;
     try { stream=libraryFile.startWrite(); stream.write(playlists.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)); libraryFile.finishWrite(stream); }
@@ -178,11 +176,7 @@ final class CloudData {
       else if(value instanceof Number n) { if(key.equals("podcastSpeed")) edit.putFloat(key,Math.max(.5f,Math.min(3,n.floatValue()))); else edit.putInt(key,n.intValue()); }
       else if(value instanceof String s) edit.putString(key,s);
     } edit.apply();
-    var progress=c.getSharedPreferences("podcast-progress",0).edit().clear();
-    for(String key:keys) if(key.startsWith("progress/")) {
-      JSONObject p=data.getJSONObject(key); String id=p.getString("id");
-      progress.putLong(id,Math.max(0,p.optLong("position"))).putBoolean(id+".done",p.optBoolean("done"));
-    } progress.apply();
+    PodcastPositions.install(c,positions);
     JSONObject resume=data.has("resume")?new JSONObject(data.getJSONObject("resume").toString()):new JSONObject();
     resume.put("owner",CloudSync.prefs(c).getString("libraryOwner","")); JsonDisk.write(c,"cloud-resume.json",resume);
     if(trustedLocal && data.has("_localQueue")) JsonDisk.write(c,"queue.json",data.getJSONObject("_localQueue"));

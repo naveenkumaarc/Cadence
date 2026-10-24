@@ -189,22 +189,20 @@ final class PodcastStore {
   }
 
   synchronized long progress(String episode) {
-    return context.getSharedPreferences("podcast-progress", 0).getLong(episode, 0);
+    return PodcastPositions.selected(context,episode).position();
   }
 
   synchronized boolean completed(String episode) {
-    return context.getSharedPreferences("podcast-progress", 0).getBoolean(episode + ".done", false);
+    return PodcastPositions.selected(context,episode).done();
   }
 
   synchronized void progress(String episode, long position, boolean complete) {
     if (episode.isEmpty()) return;
-    context
-        .getSharedPreferences("podcast-progress", 0)
-        .edit()
-        .putLong(episode, Math.max(0, position))
-        .putBoolean(episode + ".done", complete)
-        .apply();
-    CloudSync.progressChanged(context);
+    try { if(PodcastPositions.record(context,episode,position,complete)) CloudSync.progressChanged(context); }
+    catch(Exception failure) { context.getSharedPreferences("podcast-progress",0).edit().putLong(episode,Math.max(0,position)).putBoolean(episode+".done",complete).apply(); }
+  }
+  synchronized void selectPosition(String episode,long position,boolean complete) throws Exception {
+    PodcastPositions.record(context,episode,position,complete,true);CloudSync.changed(context);
   }
 
   static List<Podcasts.Show> validateShows(JSONArray list) throws Exception {

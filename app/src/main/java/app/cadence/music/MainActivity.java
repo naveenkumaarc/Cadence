@@ -69,6 +69,7 @@ public final class MainActivity extends Activity {
   private Artwork miniArt, headerPhoto;
   private GoogleLogin googleLogin;
   private TextView syncStatus;
+  private Button syncNowButton;
   private Button playlistDownload;
   private final java.util.Map<String, TransportButton> episodePlayButtons = new java.util.HashMap<>();
   private final java.util.Map<String, TextView> episodeProgress = new java.util.HashMap<>();
@@ -165,7 +166,7 @@ public final class MainActivity extends Activity {
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     Artwork.configure(this);
-    googleLogin = new GoogleLogin(this, message -> new AlertDialog.Builder(this).setTitle("Google connection").setMessage(message).setPositiveButton("OK",null).show(), () -> { refreshProfilePhoto(); showProfile(); });
+    googleLogin = new GoogleLogin(this, message -> new AlertDialog.Builder(this).setTitle("Google connection").setMessage(message).setPositiveButton("OK",null).show(), () -> { refreshProfilePhoto(); showProfile();if(CloudSync.prefs(this).getBoolean("chooseBackup",false))cloudRecovery(); });
     CloudSync.onApplied = this::cloudApplied;
     try {
       library = new Library(this);
@@ -422,7 +423,7 @@ public final class MainActivity extends Activity {
     page = name;
     songBadges.clear(); songTimes.clear();
     episodePlayButtons.clear(); episodeProgress.clear(); episodeBars.clear(); displayedEpisodes.clear();
-    playlistDownload = null; syncStatus = null;
+    playlistDownload = null; syncStatus = null; syncNowButton = null;
     body.removeAllViews();
     String selected =
         name.equals("Playlist")
@@ -1350,7 +1351,7 @@ public final class MainActivity extends Activity {
           return new org.json.JSONObject(new String(Podcasts.readLimited(in,50*1024*1024),StandardCharsets.UTF_8));
         }
       }, backup -> new AlertDialog.Builder(this).setTitle("Restore backup?")
-        .setMessage("Merge playlists, podcast subscriptions and listening progress. Existing playlists will be kept.")
+        .setMessage(BackupLabels.local(backup)+"\n\nMerge playlists, podcast subscriptions and listening progress. Existing playlists will be kept.")
         .setNegativeButton("Cancel",null).setPositiveButton("Restore",(d,n)-> restoreBackup(backup)).show());
       return;
     }
@@ -2247,6 +2248,7 @@ public final class MainActivity extends Activity {
     download.setTextSize(12);
     downloadButtons.put(e.id, download);
     controls.addView(download, new LinearLayout.LayoutParams(0, dp(44), 1));
+    controls.addView(icon("restore","Choose listening position for "+e.title,()->chooseEpisodePosition(e)),new LinearLayout.LayoutParams(dp(44),dp(44)));
     controls.addView(
         icon(
             "more",
@@ -2279,6 +2281,32 @@ public final class MainActivity extends Activity {
     body.addView(line, new LinearLayout.LayoutParams(-1, dp(1)));
   }
 
+  private void choosePodcastResume() {
+    new AlertDialog.Builder(this).setTitle("Resume podcasts from")
+        .setSingleChoiceItems(new String[]{"Continue from latest · All devices","Continue on this device"},PodcastPositions.thisDeviceMode(this)?1:0,(d,n)-> {
+          PodcastPositions.mode(this,n==1);d.dismiss();showProfile();
+        }).setNegativeButton("Cancel",null).show();
+  }
+  private void chooseEpisodePosition(Podcasts.Episode e) {
+    var latest=PodcastPositions.latest(this,e.id);var own=PodcastPositions.device(this,e.id);
+    java.util.List<PodcastPositions.Position> options=new java.util.ArrayList<>();options.add(latest);options.add(own);
+    for(var p:PodcastPositions.choices(this,e.id)) if(!p.device().equals(own.device()))options.add(p);
+    String[] labels=new String[options.size()];
+    for(int i=0;i<labels.length;i++) {
+      var p=options.get(i);String name=i==0?"Continue from latest · "+p.name():i==1?"This device · "+BackupLabels.deviceName(this):p.name();
+      labels[i]=name+"\n"+(p.done()?"Played":episodeProgressLabel(p.position(),e.duration))+"\n"+(p.updated()>0?BackupLabels.date(p.updated()):"No dated activity saved");
+    }
+    new AlertDialog.Builder(this).setTitle("Choose listening position").setItems(labels,(d,n)-> {
+      var selected=options.get(n);
+      try {
+        if(controller!=null && currentTrack()!=null && currentTrack().podcast && currentTrack().episodeId.equals(e.id)) controller.pause();
+        podcasts.selectPosition(e.id,selected.position(),selected.done());
+        Track track=podcasts.playable(e);boolean before=inlineEpisodePlayback;inlineEpisodePlayback=true;
+        try {play(track,List.of(track));if(controller!=null)controller.seekTo(selected.done()?0:selected.position());}finally{inlineEpisodePlayback=before;}
+        refreshEpisodeControls();
+      } catch(Exception failure) {error("Listening position",failure);}
+    }).setNegativeButton("Cancel",null).show();
+  }
   private void playEpisode(Podcasts.Episode e) {
     Track t = podcasts.playable(e);
     play(t, List.of(t));
@@ -2671,7 +2699,7 @@ public final class MainActivity extends Activity {
     LinearLayout saved = settingsGroup("Your library");
     settingRow(saved, "backup", "Save backup", "Playlists, podcasts & listening progress", () -> {
       Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
-          .setType("application/json").putExtra(Intent.EXTRA_TITLE, "Cadence-backup.json");
+          .setType("application/json").putExtra(Intent.EXTRA_TITLE, BackupLabels.filename(this));
       startActivityForResult(intent, 14);
     });
     settingDivider(saved);
@@ -2689,7 +2717,7 @@ public final class MainActivity extends Activity {
     LinearLayout about = settingsGroup("About");
     settingRow(about, "info", "Playback diagnostics", "Connection, queue & playback details", this::diagnostics);
     gap(4);
-    TextView version = text("Cadence 2.1", 13, MUTED, false); version.setGravity(Gravity.CENTER); body.addView(version);
+    TextView version = text("Cadence 2.2", 13, MUTED, false); version.setGravity(Gravity.CENTER); body.addView(version);
   }
 
   private LinearLayout settingsGroup(String title) {
@@ -2753,7 +2781,7 @@ public final class MainActivity extends Activity {
 
   private void diagnostics() {
     String report =
-        "Cadence 2.1\nAndroid "
+        "Cadence 2.2\nAndroid "
             + Build.VERSION.RELEASE
             + " · "
             + Build.MANUFACTURER
@@ -2866,7 +2894,8 @@ public final class MainActivity extends Activity {
       long length=episode.duration;
       if(current && controller!=null && controller.getDuration()>0) length=controller.getDuration()/1000;
       TextView label=episodeProgress.get(id); boolean done=podcasts.completed(id);
-      if(label!=null) label.setText(done && !current?"Played":episodeProgressLabel(position,length));
+      if(label!=null) { label.setText(done && !current?"Played":episodeProgressLabel(position,length));
+        label.setContentDescription(label.getText()+" · "+(PodcastPositions.thisDeviceMode(this)?"This device":"Latest activity")); }
       ProgressBar bar=episodeBars.get(id);
       if(bar!=null) { bar.setVisibility(length>0?View.VISIBLE:View.GONE); bar.setProgress(done && !current?1000:(int)Math.min(1000,position/Math.max(1,length))); }
       TransportButton button=episodePlayButtons.get(id);
@@ -2937,6 +2966,12 @@ public final class MainActivity extends Activity {
     LinearLayout labels=column(); labels.setPadding(dp(16),0,0,0); labels.addView(text(profileName(),23,INK,true));
     labels.addView(text(CloudSync.prefs(this).getString("email","Saved on this phone"),13,MUTED,false));
     identity.addView(labels,new LinearLayout.LayoutParams(0,-2,1)); body.addView(identity); gap(8);
+    LinearLayout deviceGroup=settingsGroup("This device");
+    settingRow(deviceGroup,"info","Device name",BackupLabels.deviceName(this),()->ask("Device name","Example: Naveen’s phone",BackupLabels.deviceName(this),name->{
+      String value=name.trim();if(value.isEmpty() || value.length()>80) {toast("Use a device name between 1 and 80 characters.");return;}
+      CloudSync.prefs(this).edit().putString("deviceName",value).apply();CloudSync.changed(this);showProfile();
+    }));
+    settingDivider(deviceGroup);settingRow(deviceGroup,"play","Podcast resume",PodcastPositions.thisDeviceMode(this)?"Continue on this device":"Continue from latest",this::choosePodcastResume);
     LinearLayout edit=settingsGroup("Make it yours");
     settingRow(edit,"info","Display name","Your Cadence name",()->ask("Display name","Your name",profileName(),name->{
       if(name.length()>100) { toast("Use a name up to 100 characters."); return; }
@@ -2959,20 +2994,22 @@ public final class MainActivity extends Activity {
       LinearLayout cloud=settingsGroup("Google Drive sync");
       syncStatus=text("",13,MUTED,false); syncStatus.setPadding(dp(16),dp(12),dp(16),dp(12)); cloud.addView(syncStatus); refreshProfileStatus();
       boolean connected=CloudSync.enabled(this);
-      settingRow(cloud,"backup",connected?"Sync now":"Connect Google Drive","Hidden Cadence app storage",()-> {
-        if(!CloudSync.enabled(this) || CloudSync.prefs(this).getBoolean("needsConsent",false)) googleLogin.connectDrive();
-        else { CloudSync.schedule(this); toast("Sync requested"); }
-      });
+      syncNowButton=button("Sync now",false,()-> {
+        if(!CloudSync.enabled(this) || CloudSync.prefs(this).getBoolean("needsConsent",false))googleLogin.connectDrive();
+        else if(CloudSync.prefs(this).getBoolean("chooseBackup",false))cloudRecovery();
+        else CloudSync.syncNow(this);
+        refreshProfileStatus();
+      });cloud.addView(syncNowButton,new LinearLayout.LayoutParams(-1,dp(52)));
       settingDivider(cloud);
       LinearLayout auto=settingRow(cloud,"restore","Automatic sync","Changes sync when connected",null);
-      android.widget.Switch enabled=new android.widget.Switch(this); enabled.setContentDescription("Automatic Drive sync"); enabled.setChecked(CloudSync.automatic(this));
+      android.widget.Switch enabled=new android.widget.Switch(this); enabled.setContentDescription("Automatic Drive sync"); enabled.setChecked(CloudSync.prefs(this).getBoolean("auto",true));
       enabled.setOnCheckedChangeListener((v,value)-> {
         CloudSync.prefs(this).edit().putBoolean("auto",value).apply();
         if(value) googleLogin.connectDrive();
         else { CloudSync.prefs(this).edit().putString("status","Automatic sync paused · Sync now is available").apply();
           androidx.work.WorkManager.getInstance(this).cancelUniqueWork("cadence-cloud-periodic"); }
       }); auto.addView(enabled,new LinearLayout.LayoutParams(dp(52),dp(48)));
-      settingDivider(cloud); settingRow(cloud,"restore","Recovery copies","Restore an earlier synced library",this::cloudRecovery);
+      settingDivider(cloud); settingRow(cloud,"restore","Choose backup to restore","Device names, dates and times",this::cloudRecovery);
       settingDivider(cloud); settingRow(cloud,"play","Continue listening","Resume the queue saved in Drive",this::resumeCloudQueue);
       settingDivider(cloud); settingRow(cloud,"close","Sign out","Keep the current library on this phone",()->new AlertDialog.Builder(this).setTitle("Sign out of Google?")
           .setMessage("Sync will stop. Your current library remains on this phone.").setNegativeButton("Cancel",null).setPositiveButton("Sign out",(d,n)-> {
@@ -2981,12 +3018,12 @@ public final class MainActivity extends Activity {
     }
     gap(16); body.addView(text("Sync stores library information, your Cadence profile and download requests in your Google Drive. Audio files stay on each phone.",13,MUTED,false));
     body.addView(button("Privacy policy",false,()->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/naveenkumaarc/Cadence/blob/main/PRIVACY.md")))));
-    refreshProfilePhoto();
+    refreshProfilePhoto();refreshProfileStatus();
   }
   private void acceptGoogleProfile(GoogleLogin.Profile profile) {
     if(profile.subject().equals(CloudSync.subject(this))) { googleLogin.connectDrive(); return; }
     new AlertDialog.Builder(this).setTitle("Use this Google account?").setMessage("Choose how to start with "+profile.email()+". Your current library will be kept in a recovery copy on this phone.")
-        .setNegativeButton("Cancel",null).setNeutralButton("Use cloud library",(d,n)->activateProfile(profile,false))
+        .setNegativeButton("Cancel",null).setNeutralButton("Choose cloud backup",(d,n)->activateProfile(profile,false))
         .setPositiveButton("Merge this library",(d,n)->activateProfile(profile,true)).show();
   }
   private void activateProfile(GoogleLogin.Profile profile,boolean merge) {
@@ -2994,14 +3031,20 @@ public final class MainActivity extends Activity {
       org.json.JSONObject before=CloudData.localSnapshot(this);
       String old=CloudSync.prefs(this).getString("libraryOwner","");
       if(controller!=null && (!merge || !old.isEmpty() && !old.equals(profile.subject()))) { controller.pause(); controller.clearMediaItems(); }
-      CloudSync.activate(this,profile.subject(),profile.email(),profile.name(),profile.photo(),merge,before); refreshProfilePhoto(); showProfile(); googleLogin.connectDrive(); }
+      CloudSync.activate(this,profile.subject(),profile.email(),profile.name(),profile.photo(),merge,before);
+      CloudSync.prefs(this).edit().putBoolean("chooseBackup",!merge).apply();refreshProfilePhoto();showProfile();googleLogin.connectDrive(); }
     catch(Exception e) { error("Google profile",e); }
   }
   private void refreshProfileStatus() {
     if(syncStatus==null || !page.equals("Profile")) return;
     var prefs=CloudSync.prefs(this); String message=prefs.getString("status","Changes saved on this phone"); long last=prefs.getLong("lastSync",0);
-    if(last>0) message += "\nLast synced "+android.text.format.DateUtils.getRelativeTimeSpanString(last,System.currentTimeMillis(),android.text.format.DateUtils.MINUTE_IN_MILLIS);
+    if(last>0) message += "\nLast synced: "+BackupLabels.date(last);
+    long attempt=prefs.getLong("lastAttempt",0);if(attempt>last)message+="\nLast attempt: "+BackupLabels.date(attempt);
     syncStatus.setText(message);
+    if(syncNowButton!=null) {
+      syncNowButton.setEnabled(!CloudSync.manualRunning());
+      syncNowButton.setText(CloudSync.manualRunning()?"Syncing…":!CloudSync.enabled(this)?"Connect Google Drive":prefs.getBoolean("needsConsent",false)?"Reconnect Google Drive":prefs.getBoolean("chooseBackup",false)?"Choose cloud backup":"Sync now");
+    }
   }
   private void chooseProfilePhoto() {
     Intent pick=new Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE); startActivityForResult(pick,61);
@@ -3043,12 +3086,22 @@ public final class MainActivity extends Activity {
     } catch(Exception e) { toast("Synced library saved. Reopen Cadence to refresh."); }
   }
   private void cloudRecovery() {
-    work("Reading recovery copies…",()->CloudSync.history(this),copies->{
-      if(copies.isEmpty()) { toast("No earlier cloud copies yet. Copies are kept as your library changes."); return; }
-      String[] labels=new String[copies.size()]; for(int i=0;i<labels.length;i++) labels[i]=copies.get(i).optString("modifiedTime").replace('T',' ').replace("Z","");
-      new AlertDialog.Builder(this).setTitle("Restore library from Drive").setItems(labels,(d,n)->new AlertDialog.Builder(this).setTitle("Restore this copy?")
-          .setMessage("This restores the selected library version. Your current local library is saved as a recovery copy first.")
-          .setNegativeButton("Cancel",null).setPositiveButton("Restore",(dialog,which)->work("Restoring library…",()-> { CloudSync.restore(this,copies.get(n).getString("id")); return true; },ignored->toast("Library restored"))).show()).show();
+    work("Reading cloud backups…",()->CloudSync.history(this),copies->{
+      if(copies.isEmpty()) {
+        new AlertDialog.Builder(this).setTitle("No cloud backups yet").setMessage("There are no saved Cadence copies in this Google account. You can restore a backup file from Settings, or start syncing the library currently on this phone.")
+            .setNegativeButton("Close",null).setPositiveButton("Start syncing this library",(d,n)-> {
+              CloudSync.prefs(this).edit().putBoolean("chooseBackup",false).apply();CloudSync.periodic(this);CloudSync.syncNow(this);showProfile();
+            }).show();return;
+      }
+      String[] labels=new String[copies.size()];for(int i=0;i<labels.length;i++)labels[i]=BackupLabels.cloud(copies.get(i));
+      new AlertDialog.Builder(this).setTitle("Choose backup to restore").setItems(labels,(d,n)-> {
+        org.json.JSONObject copy=copies.get(n);
+        new AlertDialog.Builder(this).setTitle("Restore selected backup?").setMessage(BackupLabels.cloud(copy)+"\n\nThis restores the selected library version. Device listening histories are kept. A recovery copy of this phone’s current library is saved first.")
+            .setNegativeButton("Cancel",null).setPositiveButton("Restore this backup",(dialog,which)-> {
+              if(controller!=null) {controller.pause();controller.clearMediaItems();}
+              work("Restoring selected backup…",()-> {CloudSync.restore(this,copy.getString("id"));return true;},ignored->{showProfile();toast("Selected backup restored");});
+            }).show();
+      }).setNegativeButton("Cancel",null).show();
     });
   }
   private void resumeCloudQueue() {

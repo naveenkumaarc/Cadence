@@ -12,10 +12,8 @@ public final class CloudWorker extends Worker {
     catch(java.util.concurrent.CancellationException e) { return Result.success(); }
     catch(Exception e) {
       if(!owner.equals(CloudSync.subject(c))) return Result.success();
-      boolean consent=e instanceof DriveStore.ConsentException;
-      CloudSync.prefs(c).edit().putString("status",consent?"Reconnect Drive to sync":"Changes saved on this phone · Sync will retry")
-          .putBoolean("needsConsent",consent).apply();
-      return consent?Result.failure():Result.retry();
+      SyncErrors.Failure failure=CloudSync.recordFailure(c,owner,e,true);
+      return failure.retry()?Result.retry():Result.failure();
     }
   }
 }

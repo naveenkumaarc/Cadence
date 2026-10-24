@@ -10,7 +10,8 @@ final class Backup {
   static JSONObject create(Context c, Library library, PodcastStore podcasts) throws Exception {
     library.save();
     JSONObject out = new JSONObject().put("format", "cadence.backup").put("version", 2)
-        .put("createdAt", System.currentTimeMillis())
+        .put("createdAt", System.currentTimeMillis()).put("deviceName",BackupLabels.deviceName(c)).put("deviceId",CloudSync.device(c))
+        .put("podcastPositions",PodcastPositions.backup(c))
         .put("playlists", new JSONArray(new String(java.nio.file.Files.readAllBytes(new java.io.File(c.getFilesDir(), "library.json").toPath()), StandardCharsets.UTF_8)))
         .put("podcasts", podcasts.backup());
     for (String name : List.of("playback", "podcast-progress")) {
@@ -41,6 +42,7 @@ final class Backup {
   static int restore(Context c, JSONObject root, Library library, PodcastStore podcasts) throws Exception {
     if (!root.optString("format").equals("cadence.backup") || root.optInt("version") > 2)
       throw new java.io.IOException("Choose a Cadence backup JSON file.");
+    if(root.has("podcastPositions")) PodcastPositions.prepare(root.getJSONObject("podcastPositions"));
     JSONArray all = root.getJSONArray("playlists");
     if (all.length() > 2000) throw new java.io.IOException("This backup has too many playlists.");
     List<Library.Playlist> parsed = new ArrayList<>();
@@ -83,7 +85,8 @@ final class Backup {
       }
       edit.apply();
     }
-    return count;
+    PodcastPositions.restoreBackup(c,root.optJSONObject("podcastPositions"),root.optJSONObject("podcast-progress"));
+    CloudSync.changed(c);return count;
   }
   private static String key(app.cadence.core.Track t) { return t.sourceUrl + "\n" + t.title + "\n" + t.artist; }
 }
