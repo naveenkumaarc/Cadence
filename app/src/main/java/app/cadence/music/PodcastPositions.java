@@ -96,7 +96,10 @@ final class PodcastPositions {
   static synchronized JSONObject backup(Context c) throws Exception { JSONObject out=new JSONObject();capture(c,out);return out; }
   static JSONObject restoring(JSONObject saved,JSONObject current) throws Exception {
     JSONObject result=new JSONObject(saved.toString());
-    for(Iterator<String> it=current.keys();it.hasNext();) {String key=it.next();if(key.startsWith("device-progress/") && !result.has(key))result.put(key,current.get(key));}
+    for(Iterator<String> it=current.keys();it.hasNext();) {String key=it.next();if(key.startsWith("device-progress/")) {
+      JSONObject value=current.getJSONObject(key),savedValue=result.optJSONObject(key);
+      if(savedValue==null || value.optLong("updated")>savedValue.optLong("updated"))result.put(key,value);
+    }}
     long now=System.currentTimeMillis();
     for(Iterator<String> it=current.keys();it.hasNext();) {String key=it.next();if(key.startsWith("progress/") || key.startsWith("device-progress/")) now=Math.max(now,current.getJSONObject(key).optLong("updated")+1);}
     for(Iterator<String> it=result.keys();it.hasNext();) {String key=it.next();if(key.startsWith("progress/")) {JSONObject p=new JSONObject(result.getJSONObject(key).toString());String name="Restored backup · "+p.optString("name","Earlier Cadence progress");p.put("updated",now).put("name",name.substring(0,Math.min(160,name.length())));result.put(key,p);}}

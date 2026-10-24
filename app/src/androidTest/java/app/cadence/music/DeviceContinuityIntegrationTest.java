@@ -57,16 +57,18 @@ public final class DeviceContinuityIntegrationTest {
   });}
   @Test public void selectedRestoreKeepsOtherDeviceHistoryAndMakesChosenPositionLatest() {main(()-> {
     CloudSync.prefs(context).edit().putString("device","phone-test").commit();PodcastStore.get(context).progress("episode",600000,false);JSONObject saved=CloudData.snapshot(context);
+    saved.put("device-progress/"+JsonDisk.hash("episode")+"/tablet",row("episode","tablet","Tablet",1200000,100));
     PodcastStore.get(context).progress("episode",1800000,false);JSONObject current=CloudData.snapshot(context);
     current.put("device-progress/"+JsonDisk.hash("episode")+"/tablet",row("episode","tablet","Tablet",2700000,System.currentTimeMillis()+10000));
     JSONObject restored=PodcastPositions.restoring(saved,current);CloudData.apply(context,restored);
     assertEquals(600000,PodcastPositions.latest(context,"episode").position());assertEquals(2,PodcastPositions.choices(context,"episode").size());
+    assertEquals(2700000,PodcastPositions.choices(context,"episode").stream().filter(p->p.device().equals("tablet")).findFirst().orElseThrow().position());
   });}
   @Test public void localBackupCarriesDeviceMetadataAndRestoresPerDeviceHistory() {main(()-> {
     CloudSync.prefs(context).edit().putString("device","phone-test").putString("deviceName","Naveen phone").commit();PodcastStore.get(context).progress("episode",1200000,false);
     JSONObject backup=Backup.create(context,new Library(context),PodcastStore.get(context));assertEquals("Naveen phone",backup.getString("deviceName"));assertTrue(backup.getLong("createdAt")>0);assertTrue(backup.has("podcastPositions"));
     PodcastStore.get(context).progress("episode",2700000,false);Backup.restore(context,backup,new Library(context),PodcastStore.get(context));
-    assertEquals(1200000,PodcastPositions.latest(context,"episode").position());assertEquals(1200000,PodcastPositions.device(context,"episode").position());
+    assertEquals(1200000,PodcastPositions.latest(context,"episode").position());assertEquals(2700000,PodcastPositions.device(context,"episode").position());
     assertTrue(BackupLabels.filename(context).startsWith("Cadence-Naveen_phone-"));
   });}
   @Test public void backupLabelsUseOriginalSnapshotTimeAndIdentifyLegacyDevices() {main(()-> {
