@@ -61,6 +61,16 @@ public final class CloudUiIntegrationTest {
       until(()->!controller[0].getPlayWhenReady());
       main(()-> {
         assertNotNull(described(activity.getWindow().getDecorView(),"Resume Episode 3"));
+        controller[0].seekTo(100);
+        org.json.JSONObject data=CloudData.snapshot(context);
+        data.put("device-progress/"+JsonDisk.hash("ui-episode-3")+"/ui-other-phone",new org.json.JSONObject().put("id","ui-episode-3").put("device","ui-other-phone").put("name","Other phone").put("position",1000).put("done",false).put("updated",System.currentTimeMillis()+10000));
+        CloudData.apply(context,data);
+        described(activity.getWindow().getDecorView(),"Resume Episode 3").performClick();
+      });
+      until(()->controller[0].isPlaying());
+      main(()-> {
+        assertTrue("Resume should use latest account position instead of the paused player's old position",controller[0].getCurrentPosition()>=950);
+        controller[0].pause();
         Method profile=MainActivity.class.getDeclaredMethod("showProfile");profile.setAccessible(true);profile.invoke(activity);
         assertTrue(text(activity.getWindow().getDecorView(),"Your profile"));assertNotNull(described(activity.getWindow().getDecorView(),"Open your profile"));
       });

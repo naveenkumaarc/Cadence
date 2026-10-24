@@ -2237,7 +2237,10 @@ public final class MainActivity extends Activity {
     TransportButton episodePlay=new TransportButton(this,TransportButton.Icon.PLAY,BG,accent,"Play "+e.title);
     episodePlay.setOnClickListener(v -> {
       Track active=currentTrack();
-      if(active!=null && active.podcast && active.episodeId.equals(e.id)) togglePlay();
+      if(active!=null && active.podcast && active.episodeId.equals(e.id)) {
+        if(controller!=null && !controller.getPlayWhenReady())controller.seekTo(podcasts.completed(e.id)?0:podcasts.progress(e.id));
+        togglePlay();
+      }
       else playEpisodeInline(e);
       refreshEpisodeControls();
     });
