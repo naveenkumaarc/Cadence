@@ -61,7 +61,6 @@ public final class MainActivity extends Activity {
   private RefreshScrollView mainScroll;
   private MiniProgress miniProgress;
   private android.widget.GridLayout libraryGrid;
-  private long discoveryRetryAt;
   private final Handler ui = new Handler(Looper.getMainLooper());
   private final ExecutorService workers = Executors.newFixedThreadPool(4);
   private final ExecutorService discoveryWorkers = Executors.newFixedThreadPool(2);
@@ -940,7 +939,7 @@ public final class MainActivity extends Activity {
     card.addView(art, new LinearLayout.LayoutParams(dp(56), dp(56)));
     LinearLayout labels = column();
     labels.setPadding(dp(12), 0, dp(4), 0);
-    TextView name=text(playlist.id.equals("favourites")?"Liked Songs":playlist.name,UiStyle.BODY_LARGE,INK,true);name.setMaxLines(2);name.setEllipsize(android.text.TextUtils.TruncateAt.END);labels.addView(name);
+    TextView playlistName=text(playlist.id.equals("favourites")?"Liked Songs":playlist.name,UiStyle.BODY_LARGE,INK,true);playlistName.setMaxLines(2);playlistName.setEllipsize(android.text.TextUtils.TruncateAt.END);labels.addView(playlistName);
     long unmatched = playlist.tracks.stream().filter(t -> t.sourceUrl.isEmpty()).count();
     labels.addView(
         text(
@@ -3151,7 +3150,7 @@ public final class MainActivity extends Activity {
 
   private void refreshDiscovery() {
     if(homeLoading||!loadingHomes.isEmpty()){toast("Recommendations are already refreshing.");return;}
-    homeError="";languageErrors.clear();discoveryRetryAt=0;
+    homeError="";languageErrors.clear();
     if(language.equals("All")){loadHome(true);languageHomes.clear();for(String l:Preferences.LANGUAGES)new java.io.File(getFilesDir(),"discovery-"+l+".json").delete();}
     else {languageHomes.remove(language);new java.io.File(getFilesDir(),"discovery-"+language+".json").delete();}
     renderDiscovery();

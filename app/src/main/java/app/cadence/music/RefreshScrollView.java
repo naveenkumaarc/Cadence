@@ -18,7 +18,7 @@ final class RefreshScrollView extends ScrollView {
   void refreshAction(java.util.function.BooleanSupplier enabled,Runnable action){this.enabled=enabled;refresh=action;}
   @Override public boolean onInterceptTouchEvent(MotionEvent e) {
     if(e.getActionMasked()==MotionEvent.ACTION_DOWN){startX=e.getX();startY=e.getY();eligible=getScrollY()==0&&enabled.getAsBoolean();pulling=false;pull=0;}
-    if(e.getActionMasked()==MotionEvent.ACTION_MOVE&&eligible&&e.getPointerCount()==1){float dy=e.getY()-startY,dx=Math.abs(e.getX()-startX);int slop=ViewConfiguration.get(getContext()).getScaledTouchSlop();if(dx>slop&&dx>dy){eligible=false;}else if(dy>slop*2&&dy>dx*1.5f){pulling=true;getParent().requestDisallowInterceptTouchEvent(true);return true;}}
+    if(e.getActionMasked()==MotionEvent.ACTION_MOVE&&eligible&&e.getPointerCount()==1){float dy=e.getY()-startY,dx=Math.abs(e.getX()-startX);int slop=ViewConfiguration.get(getContext()).getScaledTouchSlop();if(dx>slop&&dx>dy){eligible=false;return false;}else if(dy>slop*2&&dy>dx*1.5f){pulling=true;getParent().requestDisallowInterceptTouchEvent(true);return true;}}
     return super.onInterceptTouchEvent(e);
   }
   @Override public boolean onTouchEvent(MotionEvent e) {
