@@ -44,6 +44,7 @@ final class TransportButton extends View {
   }
 
   @Override public boolean performClick(){UiStyle.feedback(this);return super.performClick();}
+  @Override public void onInitializeAccessibilityNodeInfo(android.view.accessibility.AccessibilityNodeInfo info){super.onInitializeAccessibilityNodeInfo(info);info.setClassName(android.widget.Button.class.getName());}
 
   void icon(Icon value) {
     icon = value;

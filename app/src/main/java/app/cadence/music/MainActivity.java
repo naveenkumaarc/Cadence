@@ -387,7 +387,7 @@ public final class MainActivity extends Activity {
       tab.setContentDescription(name);tab.setFocusable(true);tab.setBackground(ripple(Color.TRANSPARENT,16));
       label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);img.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
       tab.setOnClickListener(v -> {UiStyle.feedback(v);navigate(name);});
-      navigation.addView(tab, new LinearLayout.LayoutParams(0, dp(64), 1));
+      navigation.addView(tab, new LinearLayout.LayoutParams(0,dp(Math.max(64,40+20*getResources().getConfiguration().fontScale)),1));
     }
     root.addView(navigation);
     android.widget.FrameLayout canvas=new android.widget.FrameLayout(this);canvas.setBackgroundColor(BG);
@@ -826,7 +826,8 @@ public final class MainActivity extends Activity {
         searchFilter = filter; catalogResults.clear(); searchError = "";
         showSearch(); searchMusic();
       }));
-    sc.addView(filters); body.addView(sc); gap(24);
+    sc.addView(filters);LinearLayout filterBar=row();filterBar.addView(sc,new LinearLayout.LayoutParams(0,-2,1));
+    AppIcon refresh=icon("refresh","Refresh search results",this::searchMusic);refresh.setEnabled(!searchText.isBlank()&&!searchLoading);refresh.setAlpha(refresh.isEnabled()?1:.4f);filterBar.addView(refresh,new LinearLayout.LayoutParams(dp(48),dp(48)));body.addView(filterBar);gap(24);
     searchResultsBody = column(); body.addView(searchResultsBody);
     LinearLayout outer = body; body = searchResultsBody;
     try {
@@ -1951,16 +1952,7 @@ public final class MainActivity extends Activity {
     body.addView(subhead);
     gap(14);
     if (podcasts.shows.isEmpty()) {
-      body.addView(text("Follow your favourite voices", 20, INK, true));
-      gap(8);
-      body.addView(
-          text(
-              "Search for a show, paste its RSS link, or import subscriptions from an OPML file.",
-              14,
-              MUTED,
-              false));
-      gap(16);
-      body.addView(button("Import OPML", false, () -> pickFile(13, "*/*", null)));
+      emptyState(body,"podcasts","Follow your favourite voices","Search for a show above, add a podcast link, or bring your subscriptions from another player.","Add podcast link",()->ask("Add a podcast","RSS or Spotify show link","",this::addPodcastLink),"Import subscriptions",()->pickFile(13,"*/*",null));
     }
     for (int i = 0; i < podcasts.shows.size(); i += 2) {
       LinearLayout row = row();
@@ -3141,7 +3133,7 @@ public final class MainActivity extends Activity {
   private void emptyState(LinearLayout target,String symbol,String title,String copy,String cta,Runnable action,String secondary,Runnable second) {
     LinearLayout card=column();card.setPadding(dp(24),dp(24),dp(24),dp(24));card.setBackground(round(CARD,20));
     AppIcon illustration=new AppIcon(this,symbol,accent,"");illustration.setFocusable(false);illustration.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);card.addView(illustration,new LinearLayout.LayoutParams(dp(48),dp(48)));
-    TextView heading=text(title,UiStyle.TITLE,INK,true);heading.setPadding(0,dp(16),0,dp(8));card.addView(heading);
+    TextView heading=text(title,UiStyle.TITLE,INK,true);androidx.core.view.ViewCompat.setAccessibilityHeading(heading,true);heading.setPadding(0,dp(16),0,dp(8));card.addView(heading);
     TextView detail=text(copy,UiStyle.BODY,MUTED,false);detail.setPadding(0,0,0,dp(16));card.addView(detail);
     if(action!=null)card.addView(button(cta,true,action),new LinearLayout.LayoutParams(-1,-2));
     if(second!=null&&secondary!=null)card.addView(button(secondary,false,second),new LinearLayout.LayoutParams(-1,-2));
@@ -3172,6 +3164,7 @@ public final class MainActivity extends Activity {
     if(state==null){showHome();return;}searchText=state.getString("searchText","");searchFilter=state.getString("searchFilter","All");
     String name=state.getString("page","Home");
     if(name.equals("Settings"))settings();else if(name.equals("Profile"))showProfile();
+    else if(name.equals("Search")){showSearch();if(!searchText.isBlank()&&catalogResults.isEmpty())searchMusic();}
     else if(name.equals("Playlist")){String id=state.getString("playlist","");if(id.equals(SongDownloads.PLAYLIST_ID))showPlaylist(songDownloads.playlist());else {Library.Playlist found=library.playlists.stream().filter(x->x.id.equals(id)).findFirst().orElse(null);if(found!=null)showPlaylist(found);else showLibrary();}}
     else if(name.equals("Show")){String feed=state.getString("feed","");Podcasts.Show found=podcasts.knownShows().stream().filter(x->x.feedUrl.equals(feed)).findFirst().orElse(null);if(found!=null)showPodcast(found);else showPodcasts();}
     else navigate(name);
@@ -3235,7 +3228,7 @@ public final class MainActivity extends Activity {
     if(size>=21){androidx.core.view.ViewCompat.setAccessibilityHeading(view,true);view.setLetterSpacing(-.02f);}
     view.setTextColor(colour);
     view.setTypeface(Typeface.create("sans-serif", bold ? Typeface.BOLD : Typeface.NORMAL));
-    view.setLineSpacing(dp(4),1);view.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY);
+    view.setLineSpacing(dp(4),1);
     return view;
   }
 
