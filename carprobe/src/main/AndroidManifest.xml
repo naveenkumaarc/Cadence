@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 <queries><package android:name="app.cadence.player"/></queries>
 <application android:label="Cadence car integration check" android:theme="@android:style/Theme.Material.NoActionBar">
+<activity android:name=".LegacyProbeActivity" android:exported="true"/>
 <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
 </application></manifest>

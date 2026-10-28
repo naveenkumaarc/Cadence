@@ -17,7 +17,7 @@ final class AppIcon extends View {
     this.name = name;
     this.colour = colour;
     setContentDescription(label);
-    setFocusable(true);
+    setFocusable(true);setMinimumWidth(UiStyle.dp(c,48));setMinimumHeight(UiStyle.dp(c,48));setAccessibilityDelegate(new View.AccessibilityDelegate(){@Override public void onInitializeAccessibilityNodeInfo(View host,android.view.accessibility.AccessibilityNodeInfo info){super.onInitializeAccessibilityNodeInfo(host,info);info.setClassName(android.widget.Button.class.getName());}});
   }
 
   void colour(int value) {
@@ -39,6 +39,8 @@ final class AppIcon extends View {
     p.setStyle(Paint.Style.STROKE);
     path.reset();
     switch (name) {
+      case "more", "more_vert" -> {p.setStyle(Paint.Style.FILL);for(int i=0;i<3;i++)canvas.drawCircle(24,17+i*7,1.7f,p);}
+      case "refresh" -> {canvas.drawArc(13,13,35,35,-45,290,false,p);path.moveTo(35,13);path.lineTo(35,21);path.lineTo(27,21);canvas.drawPath(path,p);}
       case "save" -> {
         canvas.drawCircle(24, 24, 11, p);
         canvas.drawLine(24, 18, 24, 30, p); canvas.drawLine(18, 24, 30, 24, p);

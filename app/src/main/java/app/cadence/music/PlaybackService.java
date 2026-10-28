@@ -39,6 +39,8 @@ public final class PlaybackService extends MediaLibraryService {
   private String radioContextSeed = "";
   private long radioRetryAt;
   private AutoLibrary autoLibrary;
+  private final java.util.concurrent.atomic.AtomicBoolean carDiscoveryLoading=new java.util.concurrent.atomic.AtomicBoolean();
+  private long carDiscoveryRetryAt;
   private DefaultMediaSourceFactory sourceFactory;
   private Crossfade crossfade;
   private android.media.AudioManager audioManager;
@@ -160,7 +162,8 @@ public final class PlaybackService extends MediaLibraryService {
                   public MediaSession.ConnectionResult onConnect(
                       MediaSession mediaSession, MediaSession.ControllerInfo controller) {
                     if (controller.getUid() != Process.myUid())
-                      return MediaLibrarySession.Callback.super.onConnect(mediaSession, controller);
+                      return new MediaSession.ConnectionResult.AcceptedResultBuilder(mediaSession)
+                          .setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS).build();
                     return new MediaSession.ConnectionResult.AcceptedResultBuilder(mediaSession)
                         .setAvailableSessionCommands(
                             MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
@@ -302,17 +305,23 @@ public final class PlaybackService extends MediaLibraryService {
 
                   @Override
                   public ListenableFuture<LibraryResult<MediaItem>> onGetLibraryRoot(MediaLibrarySession s, MediaSession.ControllerInfo c, LibraryParams params) {
-                    return Futures.immediateFuture(LibraryResult.ofItem(AutoLibrary.folder("root","Cadence"),params));
+                    return Futures.immediateFuture(LibraryResult.ofItem(AutoLibrary.folder("root","Cadence"),new LibraryParams.Builder().setExtras(AutoLibrary.styles()).build()));
                   }
                   @Override
                   public ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> onGetChildren(MediaLibrarySession s, MediaSession.ControllerInfo c, String parent, int page, int pageSize, LibraryParams params) {
-                    return libraryWork(() -> {
-                      if(page<0 || pageSize<1 || pageSize>1000) return LibraryResult.ofError(androidx.media3.session.SessionError.ERROR_BAD_VALUE);
-                      List<MediaItem> all=autoLibrary.children(parent);
-                      int from=(int)Math.min((long)page*pageSize,all.size()),to=Math.min(from+pageSize,all.size());
-                      return LibraryResult.ofItemList(all.subList(from,to),params);
+                    if(parent.equals("home"))requestCarDiscovery();
+                    return libraryWork(() -> LibraryResult.ofItemList(AutoLibrary.page(autoLibrary.children(parent),page,pageSize),params));
+                  }
+                  @Override
+                  public ListenableFuture<LibraryResult<Void>> onSubscribe(MediaLibrarySession s,MediaSession.ControllerInfo c,String parent,LibraryParams params) {
+                    if(parent.equals("home"))requestCarDiscovery();
+                    return libraryWork(()->{
+                      if(!Boolean.TRUE.equals(autoLibrary.resolve(parent).mediaMetadata.isBrowsable))return LibraryResult.ofError(androidx.media3.session.SessionError.ERROR_BAD_VALUE);
+                      int count=autoLibrary.children(parent).size();handler.post(()->{if(!disposed)s.notifyChildrenChanged(c,parent,count,params);});return LibraryResult.ofVoid();
                     });
                   }
+                  @Override
+                  public ListenableFuture<LibraryResult<Void>> onUnsubscribe(MediaLibrarySession s,MediaSession.ControllerInfo c,String parent) {return Futures.immediateFuture(LibraryResult.ofVoid());}
                   @Override
                   public ListenableFuture<LibraryResult<MediaItem>> onGetItem(MediaLibrarySession s, MediaSession.ControllerInfo c, String id) {
                     return libraryWork(() -> LibraryResult.ofItem(autoLibrary.resolve(id),null));
@@ -334,10 +343,7 @@ public final class PlaybackService extends MediaLibraryService {
                   @Override
                   public ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> onGetSearchResult(MediaLibrarySession s, MediaSession.ControllerInfo c, String query, int page, int size, LibraryParams params) {
                     return libraryWork(() -> {
-                      if(page<0 || size<1 || size>1000) return LibraryResult.ofError(androidx.media3.session.SessionError.ERROR_BAD_VALUE);
-                      List<MediaItem> all=autoLibrary.search(query);
-                      int from=(int)Math.min((long)page*size,all.size());
-                      return LibraryResult.ofItemList(all.subList(from,Math.min(from+size,all.size())),params);
+                      return LibraryResult.ofItemList(AutoLibrary.page(autoLibrary.search(query),page,size),params);
                     });
                   }
                   @Override
@@ -346,7 +352,7 @@ public final class PlaybackService extends MediaLibraryService {
                     int selected=startIndex==C.INDEX_UNSET?0:startIndex;
                     if(controller.getUid()!=Process.myUid() && selected>=0 && selected<items.size()) {
                       String id=items.get(selected).mediaId;
-                      if(items.get(selected).requestMetadata.searchQuery==null && (id.startsWith("track:") || id.startsWith("episode:"))) {
+                      if(items.get(selected).requestMetadata.searchQuery==null && (id.startsWith("track:") || id.startsWith("episode:") || id.startsWith("recommend:") || id.startsWith("collection-track:"))) {
                         if(crossfade!=null) crossfade.cancel();
                         radioRequested="";radioRetryAt=0;
                         var future=com.google.common.util.concurrent.SettableFuture.<MediaSession.MediaItemsWithStartPosition>create();
@@ -394,15 +400,8 @@ public final class PlaybackService extends MediaLibraryService {
                         });
                         return future;
                       }
-                      try {
-                        java.util.ArrayList<MediaItem> resolved = new java.util.ArrayList<>();
-                        for (MediaItem item : items) {
-                          MediaItem known = autoLibrary.resolve(item.mediaId);
-                          if (!Boolean.TRUE.equals(known.mediaMetadata.isPlayable) || !allowed(known)) throw new SecurityException();
-                          resolved.add(known);
-                        }
-                        return Futures.immediateFuture(resolved);
-                      } catch (Exception e) { return Futures.immediateFailedFuture(new SecurityException("Unknown library item",e)); }
+                      var resolvedFuture=com.google.common.util.concurrent.SettableFuture.<List<MediaItem>>create();
+                      libraryTasks.execute(()->{try{java.util.ArrayList<MediaItem> resolved=new java.util.ArrayList<>();for(MediaItem item:items){MediaItem known=autoLibrary.resolve(item.mediaId);if(!Boolean.TRUE.equals(known.mediaMetadata.isPlayable)||!allowed(known))throw new SecurityException();resolved.add(known);}resolvedFuture.set(resolved);}catch(Exception e){resolvedFuture.setException(new SecurityException("Unknown library item",e));}});return resolvedFuture;
                     }
                     for (MediaItem item : items) {
                       if (item.localConfiguration == null)
@@ -420,6 +419,12 @@ public final class PlaybackService extends MediaLibraryService {
     handler.postDelayed(checkpoint, 5000);
     handler.post(playbackTick);
     publishWidget();
+  }
+
+  private void requestCarDiscovery() {
+    if(disposed||!autoLibrary.refreshNeeded()||System.currentTimeMillis()<carDiscoveryRetryAt||!carDiscoveryLoading.compareAndSet(false,true))return;
+    carDiscoveryRetryAt=System.currentTimeMillis()+60_000;
+    networkTasks.execute(()->{try{autoLibrary.refreshDiscovery();int count=autoLibrary.children("home").size();handler.post(()->{if(!disposed&&session!=null)session.notifyChildrenChanged("home",count,null);});}catch(Exception ignored){/* Cached shelves and the library remain available offline. */}finally{carDiscoveryLoading.set(false);}});
   }
 
   private <T> ListenableFuture<LibraryResult<T>> libraryWork(java.util.concurrent.Callable<LibraryResult<T>> task) {

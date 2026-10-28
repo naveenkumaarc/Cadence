@@ -37,10 +37,13 @@ final class TransportButton extends View {
     this.icon = icon;
     this.foreground = foreground;
     this.background = background;
+    setForeground(UiStyle.ripple(context,android.graphics.Color.TRANSPARENT,100));setMinimumWidth(UiStyle.dp(context,48));setMinimumHeight(UiStyle.dp(context,48));
     setClickable(true);
     setFocusable(true);
     setContentDescription(description);
   }
+
+  @Override public boolean performClick(){UiStyle.feedback(this);return super.performClick();}
 
   void icon(Icon value) {
     icon = value;

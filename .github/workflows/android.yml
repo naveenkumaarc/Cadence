@@ -32,7 +32,7 @@ jobs:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
           log-accepted-android-sdk-licenses: false
       - name: Build and check unsigned release and test APKs
-        run: ./gradlew --no-daemon -PcadenceUnsigned :core:test :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease :app:lintRelease
+        run: ./gradlew --no-daemon -PcadenceUnsigned :core:test :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease :app:lintRelease :carprobe:assembleDebug
       - name: Enable emulator acceleration
         run: sudo chmod a+rw /dev/kvm
       - name: Native Android tests
@@ -48,10 +48,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Cadence-2.2-api-${{ matrix.api }}
+          name: Cadence-2.3-api-${{ matrix.api }}
           retention-days: 7
           path: |
             app/build/outputs/apk/
+            carprobe/build/outputs/apk/
             app/build/reports/
             app/build/outputs/androidTest-results/
             core/build/test-results/
