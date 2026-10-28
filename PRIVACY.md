@@ -1,6 +1,6 @@
 # Cadence privacy policy
 
-Effective for Cadence 2.2. Maintainer: Naveen Kumaar. Contact: cnaveenkumaar@gmail.com. Source and support: https://github.com/naveenkumaarc/Cadence.
+Effective for Cadence 2.3. Maintainer: Naveen Kumaar. Contact: cnaveenkumaar@gmail.com. Source and support: https://github.com/naveenkumaarc/Cadence.
 
 Cadence is an Android music and podcast player. It can be used without signing in. Playlists, preferences and listening progress are stored on your phone.
 
@@ -13,6 +13,10 @@ If you connect Google Drive, Cadence requests `drive.appdata`, limited to its hi
 Actual music/podcast files, local file access grants, transfer IDs, device file paths and download-complete flags are not uploaded. A saved download list does not mean that its audio is available on another phone. Account-specific sync documents and recent recovery copies are stored in your Google Drive. Cadence uses a random installation identifier to keep each phone's updates separate. It also stores the device model or the device name you choose, backup timestamps and separate per-device episode positions/timestamps. These labels let you choose a listening position or backup. They do not include a hardware serial number, advertising ID or Bluetooth address. This metadata is private application data in your Google account, not a publicly shared playlist.
 
 Google credentials and consent are handled by Google's official Android components. Cadence does not collect your Google password, store OAuth access tokens on disk, or send your library to a separate Cadence server. Google supplies tokens when needed; they remain in memory for requests to Google's HTTPS APIs. This is not a claim of end-to-end encryption against Google.
+
+## Android Auto and appearance
+
+When you connect to Android Auto, Cadence exposes media metadata, artwork references, saved library folders, discovery recommendations and listening progress to the connected car interface so you can browse and control playback. Recommendations use the phone's discovery cache and may refresh through the same content providers. This does not upload audio files or your library to a separate Cadence server. Theme, motion and haptic preferences are stored locally on each phone.
 
 ## Other network access
 
