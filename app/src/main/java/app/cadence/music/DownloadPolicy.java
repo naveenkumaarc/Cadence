@@ -15,6 +15,10 @@ final class DownloadPolicy {
   static boolean allowed(Context c) {
     ConnectivityManager manager=(ConnectivityManager)c.getSystemService(Context.CONNECTIVITY_SERVICE);
     NetworkCapabilities network=manager.getNetworkCapabilities(manager.getActiveNetwork());
+    if(android.os.Build.VERSION.SDK_INT<28) {
+      android.net.NetworkInfo info=manager.getActiveNetworkInfo();
+      if(info!=null&&info.isRoaming())return false;
+    }
     return network!=null&&network.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
         &&(android.os.Build.VERSION.SDK_INT<28||network.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING))
         &&(!wifiOnly(c)||network.hasTransport(NetworkCapabilities.TRANSPORT_WIFI));
