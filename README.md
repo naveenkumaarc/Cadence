@@ -1,8 +1,12 @@
-# Cadence 2.3
+# Cadence 2.4
 
 Android music and podcast player, Android 8 or newer. Dark Material-style surfaces, rounded cards, native Media3 playback and optional Google Drive continuity.
 
-## Download
+## Changes in 2.4
+
+Podcast library ordering, Search back navigation and podcast results, Home content filters, a card-based playlist picker, download connection preferences, a resumable song-download queue, custom colour schemes, corrected icons and the new Cadence Loop launcher icon. [2.4 release notes](RELEASE-NOTES-2.4.md) · [2.4 verification](VERIFICATION-2.4.md).
+
+## Latest published download (2.3)
 
 [**Download Cadence 2.3 APK**](https://github.com/naveenkumaarc/Cadence/releases/download/v2.3/Cadence-2.3.apk) · [Release, source archive and checksums](https://github.com/naveenkumaarc/Cadence/releases/tag/v2.3) · [Homepage](https://naveenkumaarc.github.io/Cadence/)
 
@@ -51,7 +55,7 @@ Google Cloud is configured for an External audience with publishing status **In 
 
 The 2.0.1 fixes for paused-service recovery, Bluetooth media buttons, audio focus, CSV song lengths, offline downloads, search filters and the player scrubber remain. Android Auto's MediaLibraryService exposes the library and playback controls. Automated browser-client and playback tests pass; a physical car and headset have not been tested for this release. A sideloaded app may need Android Auto's developer **Unknown sources** option before appearing in the car app list.
 
-Downloads use Android's DownloadManager and app-specific storage. Removing a download keeps playlist entries. Uninstalling removes private app data and app-specific audio downloads. Export a local backup before removing the app.
+New song downloads use persistent WorkManager requests and resumable partial files in app-specific storage. Episode downloads and transfers retained from older versions use Android's DownloadManager. Removing a download keeps playlist entries. Uninstalling removes private app data and app-specific audio downloads. Export a local backup before removing the app.
 
 ## Original 0.3.1 migration
 
@@ -62,7 +66,7 @@ The original 0.3.1 private signing key was not supplied. It cannot be recovered 
 3. In Cadence, choose **Settings → Restore backup** and select the JSON. Check your playlists, subscriptions and progress.
 4. Download offline audio again and reselect local files; audio and Android file permissions are not in the backup.
 
-The private signing kit stays outside the public source. Future updates must retain that key and increase `versionCode`. Version 2.3 uses package `app.cadence.player`, version code `9`.
+The private signing kit stays outside the public source. Future updates must retain that key and increase `versionCode`. Version 2.4 uses package `app.cadence.player`, version code `10`.
 
 ## Play Protect
 

@@ -20,8 +20,24 @@ final class UiStyle {
   static String theme(Context c) {return preferences(c).getString("theme","Dark");}
   static Palette palette(Context c) {
     String choice=theme(c);boolean system=(c.getResources().getConfiguration().uiMode&Configuration.UI_MODE_NIGHT_MASK)==Configuration.UI_MODE_NIGHT_NO;
-    return choice.equals("Light")||choice.equals("Follow device")&&system?LIGHT:DARK;
+    boolean light=choice.equals("Light")||choice.equals("Follow device")&&system;
+    Palette base=light?LIGHT:DARK;
+    if(!preferences(c).contains("colour"))return base;
+    return scheme(preferences(c).getInt("colour",0xff80c9a4),light);
   }
+  static Palette scheme(int colour,boolean light) {
+    float[] hsv=new float[3];Color.colorToHSV(colour,hsv);
+    float hue=hsv[0],sat=Math.min(.85f,Math.max(0,hsv[1]));
+    int accent=tone(hue,sat,light?.43f:.90f);
+    int onAccent=light?Color.WHITE:0xff0e1b15;
+    while(androidx.core.graphics.ColorUtils.calculateContrast(onAccent,accent)<4.5)accent=androidx.core.graphics.ColorUtils.blendARGB(accent,light?Color.BLACK:Color.WHITE,.05f);
+    int ink=light?0xff14201b:0xfff5f7f6;
+    return new Palette(tone(hue,sat*.12f,light?.98f:.075f),tone(hue,sat*.13f,light?1f:.13f),
+        tone(hue,sat*.24f,light?.92f:.20f),ink,light?0xff4e5d56:0xffb6c2bb,accent,
+        onAccent,tone(hue,sat*.20f,light?.80f:.27f),
+        tone(hue,sat*.20f,light?.72f:.40f),(accent&0x00ffffff)|(light?0x25000000:0x35000000),light);
+  }
+  private static int tone(float hue,float saturation,float value) {return Color.HSVToColor(new float[]{hue,saturation,value});}
   static boolean motion(Context c) {return preferences(c).getBoolean("motion",true)&&android.animation.ValueAnimator.areAnimatorsEnabled();}
   static void feedback(View v) {if(preferences(v.getContext()).getBoolean("haptics",true))v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);}
   static int dp(Context c,float value) {return Math.round(value*c.getResources().getDisplayMetrics().density);}

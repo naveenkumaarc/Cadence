@@ -149,7 +149,7 @@ final class Artwork extends ImageView {
             height,
             Math.max(width, 1),
             0,
-            new int[] {Color.rgb(17, 46, 44), Color.rgb(71, 108, 87), Color.rgb(166, 245, 208)},
+            new int[] {UiStyle.palette(getContext()).background(), UiStyle.palette(getContext()).raised(), UiStyle.palette(getContext()).accent()},
             null,
             Shader.TileMode.CLAMP);
   }

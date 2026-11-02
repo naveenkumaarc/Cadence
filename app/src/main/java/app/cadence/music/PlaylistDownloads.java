@@ -21,11 +21,12 @@ final class PlaylistDownloads {
       if(t.sourceUrl.isEmpty()) { unmatched++; continue; }
       if(!t.sourceUrl.startsWith("https://") || !ids.add(DownloadList.id(t))) continue;
       DownloadList.remember(c,t);
+      if(!t.podcast&&!complete(c,t)&&!active(c,t))SongDownloads.get(c).start(t);
       list.put(new JSONObject().put("track",Library.encode(t)).put("status",complete(c,t)?"complete":active(c,t)?"started":"queued"));
     }
     group.put("tracks",list); all.put(playlist.id,group); write(c,all);
     WorkManager.getInstance(c).enqueueUniqueWork("cadence-playlist-downloads",ExistingWorkPolicy.APPEND_OR_REPLACE,
-        new OneTimeWorkRequest.Builder(PlaylistDownloadWorker.class).setConstraints(new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build());
+        new OneTimeWorkRequest.Builder(PlaylistDownloadWorker.class).setConstraints(DownloadPolicy.constraints(c)).build());
     return unmatched;
   }
   static synchronized Summary summary(Context c,String id) throws Exception {
