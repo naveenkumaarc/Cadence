@@ -6,7 +6,11 @@ Android music and podcast player, Android 8 or newer. Dark Material-style surfac
 
 Podcast library ordering, Search back navigation and podcast results, Home content filters, a card-based playlist picker, download connection preferences, a resumable song-download queue, custom colour schemes, corrected icons and the new Cadence Loop launcher icon. [2.4 release notes](RELEASE-NOTES-2.4.md) · [2.4 verification](VERIFICATION-2.4.md).
 
-## Latest published download (2.3)
+## Download Cadence 2.4
+
+[**Download the signed Cadence 2.4 APK**](https://github.com/naveenkumaarc/Cadence/raw/refs/heads/codex/cadence-2.4-improvements/downloads/Cadence-2.4.apk). Install over Cadence 2.x without uninstalling. The APK uses the retained release certificate. [SHA-256 checksum](downloads/SHA256SUMS-2.4.txt) · [Release notes](RELEASE-NOTES-2.4.md).
+
+## Earlier GitHub release (2.3)
 
 [**Download Cadence 2.3 APK**](https://github.com/naveenkumaarc/Cadence/releases/download/v2.3/Cadence-2.3.apk) · [Release, source archive and checksums](https://github.com/naveenkumaarc/Cadence/releases/tag/v2.3) · [Homepage](https://naveenkumaarc.github.io/Cadence/)
 
