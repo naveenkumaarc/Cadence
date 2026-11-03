@@ -1,14 +1,16 @@
-# Cadence 2.4
+# Cadence 2.4.1
 
 Android music and podcast player, Android 8 or newer. Dark Material-style surfaces, rounded cards, native Media3 playback and optional Google Drive continuity.
 
 ## Changes in 2.4
 
-Podcast library ordering, Search back navigation and podcast results, Home content filters, a card-based playlist picker, download connection preferences, a resumable song-download queue, custom colour schemes, corrected icons and the new Cadence Loop launcher icon. [2.4 release notes](RELEASE-NOTES-2.4.md) · [2.4 verification](VERIFICATION-2.4.md).
+Podcast library ordering, Search back navigation and podcast results, Home content filters, a card-based playlist picker, download connection preferences, a resumable song-download queue, custom colour schemes, corrected controls. Version 2.4.1 restores the previous launcher icon. [2.4 release notes](RELEASE-NOTES-2.4.md) · [2.4 verification](VERIFICATION-2.4.md).
 
-## Download Cadence 2.4
+## Download Cadence 2.4.1
 
-[**Download the signed Cadence 2.4 APK**](https://github.com/naveenkumaarc/Cadence/raw/refs/heads/codex/cadence-2.4-improvements/downloads/Cadence-2.4.apk). Install over Cadence 2.x without uninstalling. The APK uses the retained release certificate. [SHA-256 checksum](downloads/SHA256SUMS-2.4.txt) · [Release notes](RELEASE-NOTES-2.4.md).
+[**Download the signed Cadence 2.4.1 APK**](https://github.com/naveenkumaarc/Cadence/raw/refs/heads/main/downloads/Cadence-2.4.1.apk)
+
+The original green equalizer icon is restored. Install over Cadence 2.x without uninstalling; your library and downloads are retained. [SHA-256 checksum](downloads/SHA256SUMS-2.4.1.txt) · [2.4.1 release notes](RELEASE-NOTES-2.4.1.md) · [Verification](VERIFICATION-2.4.1.md).
 
 ## Earlier GitHub release (2.3)
 
@@ -70,7 +72,7 @@ The original 0.3.1 private signing key was not supplied. It cannot be recovered 
 3. In Cadence, choose **Settings → Restore backup** and select the JSON. Check your playlists, subscriptions and progress.
 4. Download offline audio again and reselect local files; audio and Android file permissions are not in the backup.
 
-The private signing kit stays outside the public source. Future updates must retain that key and increase `versionCode`. Version 2.4 uses package `app.cadence.player`, version code `10`.
+The private signing kit stays outside the public source. Future updates must retain that key and increase `versionCode`. Version 2.4.1 uses package `app.cadence.player`, version code `11`.
 
 ## Play Protect
 

@@ -1,0 +1,4 @@
+Cadence 2.4.1 restores the original green equalizer icon and retains the 2.4 improvements.
+Install Cadence-2.4.1.apk over your current Cadence 2.x installation without uninstalling.
+Package: app.cadence.player. Version code: 11. Retained release signing certificate.
+See RELEASE-NOTES-2.4.1.md and VERIFICATION-2.4.1.md in the main branch.

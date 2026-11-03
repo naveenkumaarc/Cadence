@@ -1,4 +1,6 @@
-# Cadence Loop
+# Cadence Loop (superseded concept)
+
+Cadence 2.4.1 restores the original green equalizer launcher icon. This earlier concept is retained for reference and is not used by the app.
 
 A C-shaped loop suggests the app's name, a record groove and repeating rhythm. The play triangle makes the music-player purpose legible at launcher size. The open right side gives the mark some movement without fine detail.
 
