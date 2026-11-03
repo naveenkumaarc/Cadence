@@ -9,13 +9,15 @@ import app.cadence.core.HttpDownloader;
 import app.cadence.core.Links;
 import app.cadence.core.Track;
 import app.cadence.core.YouTube;
+import app.cadence.core.ResumableDownload;
+import androidx.work.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.*;
 import org.json.*;
 
-/** Durable song downloads owned by Android's DownloadManager; stable source URLs stay in playlists. */
+/** Durable resumable song transfers, with compatibility for existing DownloadManager files. */
 final class SongDownloads {
   static final String PLAYLIST_ID = "cadence:downloaded";
   private static SongDownloads instance;
@@ -28,11 +30,14 @@ final class SongDownloads {
   private final AtomicFile index;
   private final LinkedHashMap<String, Entry> entries = new LinkedHashMap<>();
   private static final class Entry {
-    Track track; String name; long job; boolean complete;
+    Track track; String name, address="", mime="audio/*", validator="", generation="", status="queued";
+    long job, bytes, total=-1; boolean complete, paused;
+    volatile okhttp3.Call call;
   }
   static final class State {
     String label = "Download song", uri = "";
-    boolean complete, active;
+    boolean complete, active, paused;
+    int percent=-1;
   }
 
   SongDownloads(Context context) throws Exception {
@@ -44,7 +49,10 @@ final class SongDownloads {
         JSONObject record = list.getJSONObject(i);
         Entry entry = new Entry(); entry.track = Library.decode(record.getJSONObject("track"));
         entry.name = record.getString("file"); entry.job = record.getLong("job");
-        entry.complete = record.optBoolean("complete");
+        entry.complete = record.optBoolean("complete");entry.paused=record.optBoolean("paused");
+        entry.address=record.optString("address");entry.mime=record.optString("mime","audio/*");entry.validator=record.optString("validator");
+        entry.generation=record.optString("generation");entry.status=record.optString("status","queued");
+        entry.bytes=record.optLong("bytes");entry.total=record.optLong("total",-1);
         // The index never grants access outside our song download directory.
         if (!entry.name.matches("[a-f0-9]{64}\\.audio")) continue;
         entries.put(key(entry.track.sourceUrl), entry);
@@ -77,6 +85,15 @@ final class SongDownloads {
       } else state.label = "Download again";
       return state;
     }
+    if(entry.job==0) {
+      state.paused=entry.paused;state.active=!entry.status.equals("failed");
+      state.percent=entry.total>0?(int)Math.min(100,entry.bytes*100/entry.total):-1;
+      state.label=entry.paused?"Paused":entry.status.equals("failed")?"Download failed · Retry":
+          !DownloadPolicy.allowed(context)?(DownloadPolicy.wifiOnly(context)?"Waiting for Wi-Fi":"Waiting for connection"):
+          entry.status.equals("preparing")?"Preparing audio…":entry.status.equals("queued")?"Queued":
+          entry.status.equals("retry")?"Waiting to retry":state.percent>=0?"Downloading · "+state.percent+"%":"Downloading…";
+      return state;
+    }
     try (var cursor = manager().query(new DownloadManager.Query().setFilterById(entry.job))) {
       if (cursor == null || !cursor.moveToFirst()) { state.label = "Download again"; return state; }
       int status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
@@ -90,6 +107,7 @@ final class SongDownloads {
         state.active = true;
         long total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
         long done = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+        state.percent=total>0?(int)Math.min(100,done*100/total):-1;
         state.label = status == DownloadManager.STATUS_PAUSED ? "Download waiting" :
             total > 0 ? "Downloading · " + Math.min(100, done * 100 / total) + "%" : "Downloading…";
       }
@@ -117,55 +135,123 @@ final class SongDownloads {
     return playlist;
   }
 
-  void start(Track track) throws Exception {
-    synchronized (this) { State state = state(track); if (state.active || state.complete) return; }
-    if (track.podcast) throw new IOException("Use the episode download control for podcasts.");
-    Track copy = Library.decode(Library.encode(track));
-    YouTube.Resolved resolved = YouTube.resolve(copy.sourceUrl);
-    if (resolved.track.durationSeconds > 0) copy.durationSeconds = resolved.track.durationSeconds;
-    startResolved(copy, resolved.streamUrl, resolved.mimeType);
+  synchronized List<Track> requests() {return entries.values().stream().map(e->e.track).collect(java.util.stream.Collectors.toList());}
+  private static final java.util.concurrent.ConcurrentHashMap<String,Object> LOCKS=new java.util.concurrent.ConcurrentHashMap<>();
+  private Object transferLock(String source){return LOCKS.computeIfAbsent(key(source),ignored->new Object());}
+  private String workName(Entry entry){return "cadence-song-"+entry.name;}
+  private void schedule(Entry entry) {
+    OneTimeWorkRequest request=new OneTimeWorkRequest.Builder(SongDownloadWorker.class)
+        .setInputData(new Data.Builder().putString("source",entry.track.sourceUrl).putString("generation",entry.generation).build())
+        .setConstraints(DownloadPolicy.constraints(context)).build();
+    WorkManager.getInstance(context).enqueueUniqueWork(workName(entry),ExistingWorkPolicy.REPLACE,request);
   }
-
-  // Separate resolution from transfer so the real DownloadManager can be tested with public synthetic audio.
-  synchronized void startResolved(Track track, String address, String mimeType) throws Exception {
-    Uri uri = Uri.parse(address);
-    if (!"https".equals(uri.getScheme()) || uri.getHost() == null) throw new IOException("A secure audio address is required.");
-    State state = state(track); if (state.complete || state.active) return;
+  private Entry create(Track track,String address,String mime) throws Exception {
     DownloadList.remember(context,track);
-    String key = key(track.sourceUrl); Entry old = entries.get(key);
-    if (old != null) { manager().remove(old.job); File previous = file(old); if (previous != null && previous.exists() && !previous.delete()) throw new IOException("Cannot replace the old download."); }
-    Entry entry = new Entry(); entry.track = Library.decode(Library.encode(track));
-    StringBuilder name = new StringBuilder();
-    for (byte b : MessageDigest.getInstance("SHA-256").digest(key.getBytes(StandardCharsets.UTF_8)))
-      name.append(String.format(Locale.ROOT, "%02x", b & 255));
-    entry.name = name + ".audio";
-    File target = file(entry);
-    if (target == null) throw new IOException("Phone storage is unavailable.");
-    if (target.exists() && !target.delete()) throw new IOException("Cannot replace the old download.");
-    var request = new DownloadManager.Request(uri).setTitle(track.title).setDescription(track.artist)
-        .setMimeType(mimeType).addRequestHeader("User-Agent", HttpDownloader.USER_AGENT)
-        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-        .setAllowedOverMetered(true).setAllowedOverRoaming(false)
-        .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_MUSIC, entry.name);
-    entry.job = manager().enqueue(request); entries.put(key, entry);
-    try { save(); } catch (Exception failure) { manager().remove(entry.job); entries.remove(key); throw failure; }
+    Entry entry=new Entry();entry.track=Library.decode(Library.encode(track));entry.address=address;entry.mime=mime;
+    StringBuilder name=new StringBuilder();
+    for(byte b:MessageDigest.getInstance("SHA-256").digest(key(track.sourceUrl).getBytes(StandardCharsets.UTF_8)))name.append(String.format(Locale.ROOT,"%02x",b&255));
+    entry.name=name+".audio";entry.generation=UUID.randomUUID().toString();
+    entry.paused=Preferences.get(context).getBoolean("downloadsPaused",false);
+    if(file(entry)==null)throw new IOException("Phone storage is unavailable.");
+    entries.put(key(track.sourceUrl),entry);save();if(!entry.paused)schedule(entry);return entry;
   }
+  synchronized void start(Track track) throws Exception {
+    if(track.podcast)throw new IOException("Use the episode download control for podcasts.");
+    State current=state(track);if(current.complete||current.active)return;
+    Entry entry=entries.get(key(track.sourceUrl));
+    if(entry!=null&&entry.job==0){resume(track);return;}
+    create(track,"","audio/*");
+  }
+  synchronized void startResolved(Track track,String address,String mimeType) throws Exception {
+    Uri uri=Uri.parse(address);
+    if(!"https".equals(uri.getScheme())||uri.getHost()==null)throw new IOException("A secure audio address is required.");
+    State current=state(track);if(current.complete||current.active)return;
+    Entry old=entries.get(key(track.sourceUrl));
+    if(old!=null&&old.job==0){old.address=address;old.mime=mimeType;resume(track);return;}
+    if(old!=null)manager().remove(old.job);
+    create(track,address,mimeType);
+  }
+  synchronized void pause(Track track) throws Exception {
+    Entry entry=entries.get(key(track.sourceUrl));if(entry==null||state(track).complete)return;
+    entry.paused=true;entry.generation=UUID.randomUUID().toString();
+    if(entry.call!=null)entry.call.cancel();
+    if(entry.job!=0){manager().remove(entry.job);entry.job=0;entry.bytes=0;entry.total=-1;}
+    WorkManager.getInstance(context).cancelUniqueWork(workName(entry));save();
+  }
+  synchronized void resume(Track track) throws Exception {
+    Entry entry=entries.get(key(track.sourceUrl));if(entry==null||state(track).complete)return;
+    Preferences.get(context).edit().putBoolean("downloadsPaused",false).apply();
+    entry.paused=false;entry.status="queued";entry.generation=UUID.randomUUID().toString();save();schedule(entry);
+  }
+  synchronized void pauseAll(boolean paused) throws Exception {
+    Preferences.get(context).edit().putBoolean("downloadsPaused",paused).apply();
+    for(Track track:requests())if(!state(track).complete){if(paused)pause(track);else resume(track);}
+  }
+  synchronized void connectionChanged() throws Exception {
+    for(Entry entry:entries.values())if(!state(entry.track).complete&&!entry.paused) {
+      if(entry.call!=null)entry.call.cancel();
+      if(entry.job!=0){manager().remove(entry.job);entry.job=0;entry.bytes=0;entry.total=-1;}
+      entry.generation=UUID.randomUUID().toString();save();schedule(entry);
+    }
+  }
+  private synchronized boolean current(Entry entry,String generation) {
+    return entries.get(key(entry.track.sourceUrl))==entry&&entry.generation.equals(generation)&&!entry.paused;
+  }
+  boolean transfer(String source,String generation,java.util.function.BooleanSupplier stopped,java.util.function.Consumer<okhttp3.Call> active) throws Exception {
+    Entry entry;synchronized(this){entry=entries.get(key(source));if(entry==null||!current(entry,generation)||entry.complete)return true;}
+    synchronized(transferLock(source)) {
+      if(stopped.getAsBoolean()||!current(entry,generation))return true;
+      try {
+        if(entry.address.isEmpty()) {
+          synchronized(this){entry.status="preparing";save();}
+          YouTube.Resolved resolved=YouTube.resolve(source);
+          synchronized(this){if(!current(entry,generation))return true;entry.address=resolved.streamUrl;entry.mime=resolved.mimeType;entry.track.durationSeconds=resolved.track.durationSeconds;save();}
+        }
+        File target=file(entry),partial=new File(target.getPath()+".part");
+        long[] lastSave={0};
+        boolean done=ResumableDownload.transfer(HttpDownloader.MEDIA_CLIENT,entry.address,partial,entry.validator,
+            ()->stopped.getAsBoolean()||!current(entry,generation),(bytes,total,validator)->{
+              synchronized(this){if(!current(entry,generation))return;entry.bytes=bytes;entry.total=total;entry.validator=validator;entry.status="downloading";
+                if(System.currentTimeMillis()-lastSave[0]>1000){try{save();}catch(Exception e){throw new IOException(e);}lastSave[0]=System.currentTimeMillis();}}
+            },call->{entry.call=call;active.accept(call);});
+        synchronized(this) {
+          if(!current(entry,generation))return true;
+          if(!done||stopped.getAsBoolean()){entry.status="queued";save();return false;}
+          if(!validAudio(partial)){partial.delete();entry.bytes=0;entry.validator="";throw new IOException("The downloaded file is not playable audio");}
+          if(!partial.renameTo(target))throw new IOException("Cannot save downloaded audio");
+          entry.complete=true;entry.status="complete";entry.bytes=target.length();entry.total=entry.bytes;save();return true;
+        }
+      } catch(Exception failure) {
+        synchronized(this){if(current(entry,generation)){entry.status="retry";
+          if(failure instanceof ResumableDownload.HttpFailure http&&(http.code==401||http.code==403))entry.address="";
+          save();}}
+        if(!current(entry,generation))return true;throw failure;
+      }
+    }
+  }
+  synchronized void failed(String source,String generation) throws Exception {Entry entry=entries.get(key(source));if(entry!=null&&current(entry,generation)){entry.status="failed";save();}}
 
   synchronized void remove(Track track) throws Exception {
     cancelTransfer(track); DownloadList.forget(context,track);
   }
   synchronized void cancelTransfer(Track track) throws Exception {
     String key = key(track.sourceUrl); Entry entry = entries.get(key); if (entry == null) return;
-    manager().remove(entry.job);
+    entry.generation=UUID.randomUUID().toString();if(entry.call!=null)entry.call.cancel();
+    if(entry.job!=0)manager().remove(entry.job);
+    WorkManager.getInstance(context).cancelUniqueWork(workName(entry));
     File target = file(entry);
     if (target != null && target.exists() && !target.delete()) throw new IOException("Cannot remove this download.");
+    File partial=target==null?null:new File(target.getPath()+".part");
+    if(partial!=null&&partial.exists()&&!partial.delete())throw new IOException("Cannot remove this partial download.");
     entries.remove(key); save();
   }
 
   private void save() throws Exception {
     JSONArray list = new JSONArray();
     for (Entry entry : entries.values()) list.put(new JSONObject().put("track", Library.encode(entry.track))
-        .put("file", entry.name).put("job", entry.job).put("complete", entry.complete));
+        .put("file", entry.name).put("job", entry.job).put("complete", entry.complete)
+        .put("paused",entry.paused).put("address",entry.address).put("mime",entry.mime).put("validator",entry.validator)
+        .put("generation",entry.generation).put("status",entry.status).put("bytes",entry.bytes).put("total",entry.total));
     FileOutputStream stream = null;
     try { stream = index.startWrite(); stream.write(list.toString().getBytes(StandardCharsets.UTF_8)); index.finishWrite(stream); }
     catch (IOException failure) { if (stream != null) index.failWrite(stream); throw failure; }

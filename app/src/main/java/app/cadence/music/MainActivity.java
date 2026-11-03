@@ -114,6 +114,14 @@ public final class MainActivity extends Activity {
   private ListenableFuture<MediaController> controllerFuture;
   private List<Track> searchResults = new ArrayList<>();
   private Library.Playlist shownPlaylist;
+  private String homeTab="Music";
+  private MusicCatalog.Entry collectionEntry;
+  private final ArrayList<Bundle> screenHistory=new ArrayList<>();
+  private boolean restoringScreen;
+  private List<Podcasts.Show> podcastResults=new ArrayList<>();
+  private final java.util.Map<String, DownloadRow> downloadRows=new java.util.LinkedHashMap<>();
+  private Button allDownloadsToggle;
+  private record DownloadRow(Track track,TextView label,ProgressBar bar,Button toggle) {}
   private String page = "Home", searchText = "", lastError = "No error recorded.";
   private boolean destroyed = false, resumed = false;
   private int searchGeneration = 0;
@@ -169,7 +177,7 @@ public final class MainActivity extends Activity {
     BG=palette.background();CARD=palette.surface();INK=palette.ink();MUTED=palette.muted();accent=palette.accent();
     super.onCreate(savedInstanceState);
     Artwork.configure(this);
-    googleLogin = new GoogleLogin(this, message -> new AlertDialog.Builder(this).setTitle("Google connection").setMessage(message).setPositiveButton("OK",null).show(), () -> { refreshProfilePhoto(); showProfile();if(CloudSync.prefs(this).getBoolean("chooseBackup",false))cloudRecovery(); });
+    googleLogin = new GoogleLogin(this, message -> new CadenceDialogBuilder(this).setTitle("Google connection").setMessage(message).setPositiveButton("OK",null).show(), () -> { refreshProfilePhoto(); showProfile();if(CloudSync.prefs(this).getBoolean("chooseBackup",false))cloudRecovery(); });
     CloudSync.onApplied = this::cloudApplied;
     try {
       library = new Library(this);
@@ -186,7 +194,7 @@ public final class MainActivity extends Activity {
         } catch (Exception ignored) {
         }
     } catch (Exception e) {
-      new AlertDialog.Builder(this)
+      new CadenceDialogBuilder(this)
           .setTitle("Library could not be read")
           .setMessage("Your saved data has been left untouched. " + e.getMessage())
           .setCancelable(false)
@@ -196,7 +204,7 @@ public final class MainActivity extends Activity {
     }
     language = Preferences.get(this).getString("homeLanguage", "All");
     buildShell();
-    restoreScreen(savedInstanceState);
+    restoringScreen=true;try{restoreScreen(savedInstanceState);}finally{restoringScreen=false;}
     handleShare(getIntent());
     getPreferences(MODE_PRIVATE).edit().remove("spotifyClientId").remove("accent").apply();
     downloadsReceiver =
@@ -287,6 +295,14 @@ public final class MainActivity extends Activity {
 
   @Override
   public void onBackPressed() {
+    if(!screenHistory.isEmpty()) {
+      searchGeneration++;
+      Bundle previous=screenHistory.remove(screenHistory.size()-1);
+      restoringScreen=true;
+      try {restoreScreen(previous);} finally {restoringScreen=false;}
+      if(mainScroll!=null)mainScroll.post(()->mainScroll.scrollTo(0,previous.getInt("scroll",0)));
+      return;
+    }
     if (page.equals("Show")) navigate("Podcasts");
     else if (page.equals("Collection")) navigate("Home");
     else if (page.equals("Playlist")) navigate("Library");
@@ -320,13 +336,14 @@ public final class MainActivity extends Activity {
     brand.setPadding(0, 0, 0, 0);
     brand.setGravity(Gravity.CENTER_VERTICAL);
     brand.setIncludeFontPadding(false);
-    header.addView(brand, new LinearLayout.LayoutParams(-2, dp(48)));
+
     android.widget.FrameLayout profileTouch = new android.widget.FrameLayout(this);
     profileTouch.setContentDescription("Open your profile"); profileTouch.setFocusable(true);
     profileTouch.setBackground(ripple(Color.TRANSPARENT,24)); profileTouch.setOnClickListener(v -> showProfile());
     headerPhoto = new Artwork(this); headerPhoto.circle(); headerPhoto.setContentDescription("Profile photo");
     android.widget.FrameLayout.LayoutParams avatarSize = new android.widget.FrameLayout.LayoutParams(dp(30),dp(30),Gravity.CENTER);
     profileTouch.addView(headerPhoto,avatarSize); header.addView(profileTouch,new LinearLayout.LayoutParams(dp(48),dp(48)));
+    header.addView(brand,new LinearLayout.LayoutParams(-2,dp(48)));
     header.addView(new View(this),new LinearLayout.LayoutParams(0,1,1)); refreshProfilePhoto();
     header.addView(
         icon("queue", "Open queue", this::showQueue),
@@ -408,6 +425,7 @@ public final class MainActivity extends Activity {
   }
 
   private void navigate(String target) {
+    if(!restoringScreen)screenHistory.clear();
     searchGeneration++;
     shownPlaylist = null;
     switch (target) {
@@ -421,6 +439,7 @@ public final class MainActivity extends Activity {
 
   private void clear(String name, String subtitle) {
     boolean changed=!page.equals(name);page = name;libraryGrid=null;
+    if(changed&&status!=null&&(status.getText().toString().equals("Loading collection…")||status.getText().toString().equals("Loading podcast…"))){status.setText("");status.setVisibility(View.GONE);}
     if(mainScroll!=null&&changed)mainScroll.scrollTo(0,0);
     body.animate().cancel();body.setAlpha(1);body.setTranslationY(0);
     if(changed&&UiStyle.motion(this)){body.setAlpha(0);body.setTranslationY(dp(8));body.animate().alpha(1).translationY(0).setDuration(160).start();}
@@ -428,11 +447,15 @@ public final class MainActivity extends Activity {
     songBadges.clear(); songTimes.clear();
     episodePlayButtons.clear(); episodeProgress.clear(); episodeBars.clear(); displayedEpisodes.clear();
     playlistDownload = null; syncStatus = null; syncNowButton = null;
+    downloadRows.clear();allDownloadsToggle=null;
     body.removeAllViews();
     String selected =
         name.equals("Playlist")
             ? "Library"
             : name.equals("Show") ? "Podcasts" : name.equals("Collection") ? "Home" : name;
+    if((name.equals("Collection")||name.equals("Show"))&&!screenHistory.isEmpty()) {
+      String origin=screenHistory.get(0).getString("page",selected);if(navIcons.containsKey(origin))selected=origin;
+    }
     for (String key : navIcons.keySet()) {
       navIcons.get(key).colour(key.equals(selected) ? accent : MUTED);
       navLabels.get(key).setTextColor(key.equals(selected) ? accent : MUTED);
@@ -444,15 +467,20 @@ public final class MainActivity extends Activity {
     searchBox("Search songs, albums, artists or playlists", "", false);
     gap(14);
     LinearLayout filters = row();
-    filters.addView(chip("Music", true, () -> {}));
-    filters.addView(chip("Podcasts", false, () -> navigate("Podcasts")));
+    filters.addView(chip("Music", homeTab.equals("Music"), () -> {homeTab="Music";showHome();}));
+    filters.addView(chip("Podcasts", homeTab.equals("Podcasts"), () -> {homeTab="Podcasts";showHome();}));
     body.addView(filters);
     gap(16);
     LinearLayout discoveryHeading=row();TextView explore=text("Made for your listening",UiStyle.HEADING,INK,true);
     discoveryHeading.addView(explore,new LinearLayout.LayoutParams(0,-2,1));
     discoveryHeading.addView(icon("refresh","Refresh discovery",this::refreshDiscovery),new LinearLayout.LayoutParams(dp(48),dp(48)));
     body.addView(discoveryHeading);gap(16);
-    if (!library.playlists.isEmpty()) {
+    if(homeTab.equals("Podcasts")) {
+      List<Podcasts.Show> followed=podcasts.subscriptions();
+      if(followed.isEmpty())emptyState(body,"podcasts","Follow your favourite voices","Your followed podcasts will appear here.","Find podcasts",()->navigate("Podcasts"),null,null);
+      for(Podcasts.Show show:followed)podcastCard(body,show,()->showPodcast(show));
+      gap(22);
+    } else if (!library.playlists.isEmpty()) {
       android.widget.HorizontalScrollView scroll = new android.widget.HorizontalScrollView(this);
       scroll.setHorizontalScrollBarEnabled(false);
       LinearLayout cards = row();
@@ -546,8 +574,11 @@ public final class MainActivity extends Activity {
     query.setTextSize(15);
     query.setSingleLine(true); query.setSelectAllOnFocus(true);
     query.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
-    query.setContentDescription("Search music");
+    query.setContentDescription("Search music and podcasts");
     search.addView(query, new LinearLayout.LayoutParams(0, dp(56), 1));
+    AppIcon clearQuery=icon("close","Clear search",()->{query.setText("");query.requestFocus();});
+    clearQuery.setVisibility(initial.isEmpty()?View.GONE:View.VISIBLE);
+    search.addView(clearQuery,new LinearLayout.LayoutParams(dp(48),dp(48)));
     AppIcon submitIcon = icon("arrow", "Submit search", () -> {});
     search.addView(submitIcon, new LinearLayout.LayoutParams(dp(48), dp(48)));
     body.addView(search, new LinearLayout.LayoutParams(-1, -2));
@@ -568,10 +599,11 @@ public final class MainActivity extends Activity {
     query.addTextChangedListener(new android.text.TextWatcher() {
       public void beforeTextChanged(CharSequence s,int start,int count,int after) {}
       public void onTextChanged(CharSequence value,int start,int before,int count) {
+        clearQuery.setVisibility(value.length()==0?View.GONE:View.VISIBLE);
         if (searchPage) {
           searchText = value.toString();
           searchGeneration++; searchLoading = false;
-          catalogResults.clear(); searchError = "";
+          catalogResults.clear(); podcastResults.clear(); searchError = "";
           if (searchResultsBody != null) searchResultsBody.setVisibility(View.GONE);
         }
         int generation = ++suggestionGeneration;
@@ -736,6 +768,7 @@ public final class MainActivity extends Activity {
   }
 
   private void openCollection(MusicCatalog.Entry entry) {
+    rememberScreen();collectionEntry=entry;
     searchHistory.remember(entry);
     clear("Collection", "");
     body.addView(text(entry.title, 30, INK, true));
@@ -803,13 +836,16 @@ public final class MainActivity extends Activity {
     final String term = searchText, filter = searchFilter;
     searchLoading = true; searchError = ""; showSearch();
     workers.execute(() -> {
-      List<MusicCatalog.Entry> found = new ArrayList<>(); String problem = "";
-      try { found = filter.equals("All") ? MusicCatalog.searchAll(term) : MusicCatalog.search(term, filter); }
-      catch (Exception e) { problem = "Couldn’t search right now. Check your connection and try again."; }
-      List<MusicCatalog.Entry> result = found; String error = problem;
+      List<MusicCatalog.Entry> found = new ArrayList<>();
+      List<Podcasts.Show> foundPodcasts=new ArrayList<>();String problem="";
+      if(!filter.equals("Podcasts"))try {found=filter.equals("All")?MusicCatalog.searchAll(term):MusicCatalog.search(term,filter);}
+      catch(Exception e){problem="Music search is unavailable. Check your connection and try again.";}
+      if(filter.equals("All")||filter.equals("Podcasts"))try {foundPodcasts=Podcasts.search(term);}
+      catch(Exception e){problem+=(problem.isEmpty()?"":"\n")+"Podcast search is unavailable. Check your connection and try again.";}
+      List<MusicCatalog.Entry> result = found;List<Podcasts.Show> shows=foundPodcasts; String error = problem;
       ui.post(() -> {
         if (destroyed || generation != searchGeneration || !page.equals("Search")) return;
-        searchLoading = false; searchError = error; catalogResults = result; showSearch();
+        searchLoading = false; searchError = error; catalogResults = result;podcastResults=shows; showSearch();
       });
     });
   }
@@ -821,9 +857,9 @@ public final class MainActivity extends Activity {
     android.widget.HorizontalScrollView sc = new android.widget.HorizontalScrollView(this);
     sc.setHorizontalScrollBarEnabled(false);
     LinearLayout filters = row();
-    for (String filter : List.of("All", "Songs", "Albums", "Artists", "Playlists"))
+    for (String filter : List.of("All", "Songs", "Albums", "Artists", "Playlists", "Podcasts"))
       filters.addView(chip(filter, searchFilter.equals(filter), () -> {
-        searchFilter = filter; catalogResults.clear(); searchError = "";
+        searchFilter = filter; catalogResults.clear();podcastResults.clear(); searchError = "";
         showSearch(); searchMusic();
       }));
     sc.addView(filters);LinearLayout filterBar=row();filterBar.addView(sc,new LinearLayout.LayoutParams(0,-2,1));
@@ -834,13 +870,23 @@ public final class MainActivity extends Activity {
       if (searchText.isBlank()) { renderRecents(body); return; }
       if (searchLoading) { body.addView(new SkeletonView(this,false)); return; }
       if (!searchError.isEmpty()) {
-        emptyState(body,"search","Search needs another try",searchError,"Try again",this::searchMusic,"Browse music",this::showHome);return;
+        body.addView(text(searchError,14,MUTED,false));
+        body.addView(button("Retry search",false,this::searchMusic));gap(12);
+        if(catalogResults.isEmpty()&&podcastResults.isEmpty())return;
       }
-      if (catalogResults.isEmpty()) {
+      if (catalogResults.isEmpty()&&podcastResults.isEmpty()) {
         emptyState(body,"search","No matches yet","Try a shorter title, another spelling, or the artist’s name.","Browse music",this::showHome,null,null);
         return;
       }
-      if (searchFilter.equals("All")) {
+      if(searchFilter.equals("Podcasts")) {
+        body.addView(text("Podcasts",23,INK,true));gap(10);
+        for(Podcasts.Show show:podcastResults)podcastCard(body,show,()->previewPodcast(show.feedUrl));
+      } else if (searchFilter.equals("All")) {
+        if(!podcastResults.isEmpty()) {
+          body.addView(text("Podcasts",23,INK,true));gap(10);
+          for(Podcasts.Show show:podcastResults.subList(0,Math.min(5,podcastResults.size())))podcastCard(body,show,()->previewPodcast(show.feedUrl));
+          body.addView(button("See all podcasts",false,()->{searchFilter="Podcasts";searchMusic();}));gap(20);
+        }
         body.addView(text("Songs", 23, INK, true)); gap(10);
         int count = 0;
         for (MusicCatalog.Entry entry : catalogResults)
@@ -863,7 +909,7 @@ public final class MainActivity extends Activity {
     heading.addView(text("Recents", 25, INK, true), new LinearLayout.LayoutParams(0, -2, 1));
     List<MusicCatalog.Entry> recent = searchHistory.entries();
     if (!recent.isEmpty()) heading.addView(button("Clear all", false, () ->
-        new AlertDialog.Builder(this).setTitle("Clear recent searches?")
+        new CadenceDialogBuilder(this).setTitle("Clear recent searches?")
             .setMessage("Clear the songs, albums and artists shown in Recents? Your playlists and downloads stay saved.")
             .setNegativeButton("Keep recents", null).setPositiveButton("Clear all", (d,n) -> {
               searchHistory.clear(); renderRecents(target);
@@ -923,6 +969,7 @@ public final class MainActivity extends Activity {
         new LinearLayout.LayoutParams(-1, dp(50)));
     gap(12);
     body.addView(button("Import from file", false, this::showImport));
+    gap(8);body.addView(button("Download queue",false,this::showDownloadQueue));
     gap(18);
     if(getResources().getConfiguration().screenWidthDp>=600&&getResources().getConfiguration().fontScale<=1.3f){libraryGrid=new android.widget.GridLayout(this);libraryGrid.setColumnCount(2);body.addView(libraryGrid,new LinearLayout.LayoutParams(-1,-2));}
     playlistCard(songDownloads.playlist());
@@ -955,7 +1002,7 @@ public final class MainActivity extends Activity {
     card.setOnLongClickListener(
         v -> {
           if (!playlist.id.equals("favourites") && !playlist.id.equals(SongDownloads.PLAYLIST_ID) && !playlist.id.equals(DownloadList.PLAYLIST_ID))
-            new AlertDialog.Builder(this)
+            new CadenceDialogBuilder(this)
                 .setTitle(playlist.name)
                 .setItems(
                     new String[] {"Rename", "Delete playlist"},
@@ -971,7 +1018,7 @@ public final class MainActivity extends Activity {
                               showLibrary();
                             });
                       else
-                        new AlertDialog.Builder(this)
+                        new CadenceDialogBuilder(this)
                             .setMessage("Delete this playlist from Cadence?")
                             .setNegativeButton("Cancel", null)
                             .setPositiveButton(
@@ -991,6 +1038,7 @@ public final class MainActivity extends Activity {
   }
 
   private void showPlaylist(Library.Playlist requested) {
+    if(!page.equals("Playlist"))rememberScreen();
     Library.Playlist playlist = resolvePlaylist(requested);
     shownPlaylist = playlist;
     clear("Playlist", playlist.origin.isEmpty() ? "Your collection" : "Imported playlist");
@@ -1113,7 +1161,7 @@ public final class MainActivity extends Activity {
     }
     if (playlist != null && !playlist.id.equals(SongDownloads.PLAYLIST_ID) && !playlist.id.equals(DownloadList.PLAYLIST_ID)) options.add("Remove from this playlist");
     if (playlist != null && playlist.id.equals(DownloadList.PLAYLIST_ID)) options.add("Remove from saved downloads");
-    new AlertDialog.Builder(this)
+    new CadenceDialogBuilder(this)
         .setTitle(track.title)
         .setItems(
             options.toArray(new String[0]),
@@ -1146,28 +1194,27 @@ public final class MainActivity extends Activity {
   }
 
   private void choosePlaylist(Track track) {
-    String[] names = library.playlists.stream().map(p -> p.name).toArray(String[]::new);
-    new AlertDialog.Builder(this)
-        .setTitle("Save to playlist")
-        .setItems(
-            names,
-            (d, n) -> {
-              add(library.playlists.get(n), track);
-              toast("Saved");
-            })
-        .setNeutralButton(
-            "New playlist",
-            (d, n) ->
-                ask(
-                    "New playlist",
-                    "Name",
-                    "",
-                    name -> {
-                      Library.Playlist p = new Library.Playlist(name);
-                      library.playlists.add(p);
-                      add(p, track);
-                    }))
-        .show();
+    Dialog dialog=new Dialog(this);LinearLayout content=column();
+    content.setPadding(dp(20),dp(20),dp(20),dp(20));content.setBackground(round(BG,24));
+    LinearLayout heading=row();heading.addView(text("Save to playlist",23,INK,true),new LinearLayout.LayoutParams(0,-2,1));
+    heading.addView(icon("close","Close playlist picker",dialog::dismiss),new LinearLayout.LayoutParams(dp(48),dp(48)));content.addView(heading);
+    ScrollView scroll=new ScrollView(this);LinearLayout cards=column();scroll.addView(cards);
+    for(Library.Playlist playlist:library.playlists) {
+      LinearLayout card=row();card.setPadding(dp(12),dp(12),dp(12),dp(12));card.setBackground(ripple(CARD,16));
+      Artwork art=new Artwork(this);if(!playlist.tracks.isEmpty())art.load(playlist.tracks.get(0).artwork);
+      card.addView(art,new LinearLayout.LayoutParams(dp(56),dp(56)));
+      LinearLayout labels=column();labels.setPadding(dp(12),0,dp(8),0);
+      labels.addView(text(playlist.id.equals("favourites")?"Liked Songs":playlist.name,16,INK,true));
+      labels.addView(text(playlist.tracks.size()+" songs",12,MUTED,false));card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
+      AppIcon arrow=new AppIcon(this,"plus",accent,"Add to "+playlist.name);arrow.setFocusable(false);card.addView(arrow,new LinearLayout.LayoutParams(dp(48),dp(48)));
+      card.setFocusable(true);card.setContentDescription("Add "+track.title+" to "+playlist.name);
+      card.setOnClickListener(v->{add(playlist,track);dialog.dismiss();toast("Saved to "+playlist.name);});
+      LinearLayout.LayoutParams size=new LinearLayout.LayoutParams(-1,-2);size.setMargins(0,dp(8),0,0);cards.addView(card,size);
+    }
+    content.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+    content.addView(button("New playlist",true,()->{dialog.dismiss();ask("New playlist","Name","",name->{Library.Playlist p=new Library.Playlist(name);library.playlists.add(p);add(p,track);toast("Saved to "+name);});}));
+    dialog.setContentView(content);dialog.show();
+    if(dialog.getWindow()!=null){dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);dialog.getWindow().setLayout(-1,Math.min(dp(620),getResources().getDisplayMetrics().heightPixels*4/5));dialog.getWindow().setGravity(Gravity.BOTTOM);}
   }
 
   private void add(Library.Playlist playlist, Track track) {
@@ -1205,7 +1252,7 @@ public final class MainActivity extends Activity {
               candidates.stream()
                   .map(t -> t.title + "\n" + t.artist + " · " + duration(t.durationSeconds))
                   .toArray(String[]::new);
-          new AlertDialog.Builder(this)
+          new CadenceDialogBuilder(this)
               .setTitle("Choose a version: " + wanted.title)
               .setItems(
                   titles,
@@ -1348,7 +1395,7 @@ public final class MainActivity extends Activity {
           if (in == null) throw new java.io.IOException("Cannot read this file.");
           return new org.json.JSONObject(new String(Podcasts.readLimited(in,50*1024*1024),StandardCharsets.UTF_8));
         }
-      }, backup -> new AlertDialog.Builder(this).setTitle("Restore backup?")
+      }, backup -> new CadenceDialogBuilder(this).setTitle("Restore backup?")
         .setMessage(BackupLabels.local(backup)+"\n\nMerge playlists, podcast subscriptions and listening progress. Existing playlists will be kept.")
         .setNegativeButton("Cancel",null).setPositiveButton("Restore",(d,n)-> restoreBackup(backup)).show());
       return;
@@ -1613,7 +1660,7 @@ public final class MainActivity extends Activity {
     artSize.setMargins(0,dp(20),0,dp(28)); surface.addView(hero,artSize);
     playerTitle = text("", 25, INK, true);
     playerTitle.setMaxLines(2); playerTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
-    playerTitle.setOnClickListener(v -> { Track t = currentTrack(); if (t != null) new AlertDialog.Builder(this).setTitle(t.title).setMessage(t.artist).setPositiveButton("Close",null).show(); });
+    playerTitle.setOnClickListener(v -> { Track t = currentTrack(); if (t != null) new CadenceDialogBuilder(this).setTitle(t.title).setMessage(t.artist).setPositiveButton("Close",null).show(); });
     LinearLayout identity = row();
     identity.addView(playerTitle, new LinearLayout.LayoutParams(0, -2, 1));
     identity.addView(icon("save", "Save current item", () -> {
@@ -1867,7 +1914,7 @@ public final class MainActivity extends Activity {
     button.setOnLongClickListener(v -> {
       Track t = currentTrack(); if (t == null || !t.podcast) return false;
       int[] values = {15,30,60};
-      new AlertDialog.Builder(this).setTitle(forward ? "Skip forward" : "Skip back")
+      new CadenceDialogBuilder(this).setTitle(forward ? "Skip forward" : "Skip back")
         .setSingleChoiceItems(new String[]{"15 seconds","30 seconds","60 seconds"}, java.util.Arrays.binarySearch(values, Preferences.skip(this, forward)), (d,n) -> {
           Preferences.get(this).edit().putInt(forward ? "skipForward" : "skipBack", values[n]).apply();
           updatePlayer(); d.dismiss();
@@ -1904,7 +1951,12 @@ public final class MainActivity extends Activity {
     EditText query = input("Find a podcast", "");
     query.setSingleLine(true);
     query.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
-    body.addView(query);
+    LinearLayout podcastSearch=row();podcastSearch.setBackground(round(CARD,16));
+    podcastSearch.addView(query,new LinearLayout.LayoutParams(0,dp(56),1));
+    AppIcon clearPodcast=icon("close","Clear podcast search",()->query.setText(""));clearPodcast.setVisibility(View.GONE);
+    podcastSearch.addView(clearPodcast,new LinearLayout.LayoutParams(dp(48),dp(48)));
+    query.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int d){}public void afterTextChanged(android.text.Editable e){}public void onTextChanged(CharSequence s,int a,int b,int c){clearPodcast.setVisibility(s.length()==0?View.GONE:View.VISIBLE);}});
+    body.addView(podcastSearch);
     gap(10);
     Runnable search =
         () -> {
@@ -1928,16 +1980,6 @@ public final class MainActivity extends Activity {
         new LinearLayout.LayoutParams(0, dp(48), 1));
     body.addView(actions);
     gap(26);
-    List<Podcasts.Episode> continued = new ArrayList<>();
-    for (Podcasts.Show show : podcasts.knownShows())
-      for (Podcasts.Episode e : show.episodes)
-        if (podcasts.progress(e.id) > 0 && !podcasts.completed(e.id)) continued.add(e);
-    if (!continued.isEmpty()) {
-      body.addView(text("Continue listening", 22, INK, true));
-      gap(12);
-      for (Podcasts.Episode e : continued.subList(0, Math.min(4, continued.size()))) episodeRow(e);
-      gap(18);
-    }
     LinearLayout subhead = row();
     subhead.addView(text("Your shows", 23, INK, true), new LinearLayout.LayoutParams(0, -2, 1));
     subhead.addView(
@@ -1954,33 +1996,18 @@ public final class MainActivity extends Activity {
     if (podcasts.shows.isEmpty()) {
       emptyState(body,"podcasts","Follow your favourite voices","Search for a show above, add a podcast link, or bring your subscriptions from another player.","Add podcast link",()->ask("Add a podcast","RSS or Spotify show link","",this::addPodcastLink),"Import subscriptions",()->pickFile(13,"*/*",null));
     }
-    for (int i = 0; i < podcasts.shows.size(); i += 2) {
-      LinearLayout row = row();
-      row.setGravity(Gravity.TOP);
-      for (int j = i; j < Math.min(i + 2, podcasts.shows.size()); j++) {
-        Podcasts.Show show = podcasts.shows.get(j);
-        LinearLayout tile = column();
-        Artwork art = new Artwork(this);
-        art.load(show.artwork);
-        int size = Math.max(100, (getResources().getConfiguration().screenWidthDp - 48) / 2);
-        tile.addView(art, new LinearLayout.LayoutParams(-1, dp(size)));
-        TextView title = text(show.title, 15, INK, true);
-        title.setMaxLines(2);
-        title.setPadding(0, dp(8), 0, 0);
-        tile.addView(title);
-        TextView author = text(show.author, 12, MUTED, false);
-        author.setMaxLines(1);
-        tile.addView(author);
-        tile.setOnClickListener(v -> showPodcast(show));
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, -2, 1);
-        p.setMargins(0, 0, dp(12), 0);
-        row.addView(tile, p);
-      }
-      if (row.getChildCount() == 1)
-        row.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
-      body.addView(row);
-      gap(22);
-    }
+    for(Podcasts.Show show:podcasts.subscriptions())podcastCard(body,show,()->showPodcast(show));
+  }
+
+  private void podcastCard(LinearLayout target,Podcasts.Show show,Runnable action) {
+    LinearLayout card=row();card.setPadding(dp(12),dp(12),dp(12),dp(12));card.setBackground(ripple(CARD,16));
+    Artwork art=new Artwork(this);art.load(show.artwork);card.addView(art,new LinearLayout.LayoutParams(dp(64),dp(64)));
+    LinearLayout labels=column();labels.setPadding(dp(12),0,dp(8),0);
+    TextView title=text(show.title,16,INK,true);title.setMaxLines(2);title.setEllipsize(android.text.TextUtils.TruncateAt.END);labels.addView(title);
+    labels.addView(text(show.author,12,MUTED,false));card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
+    AppIcon arrow=new AppIcon(this,"chevron",MUTED,"Open "+show.title);arrow.setFocusable(false);card.addView(arrow,new LinearLayout.LayoutParams(dp(32),dp(48)));
+    card.setFocusable(true);card.setOnClickListener(v->action.run());
+    LinearLayout.LayoutParams size=new LinearLayout.LayoutParams(-1,-2);size.setMargins(0,0,0,dp(12));target.addView(card,size);
   }
 
   private void findPodcasts(String term, boolean fromSpotify) {
@@ -1989,7 +2016,7 @@ public final class MainActivity extends Activity {
         () -> Podcasts.search(term),
         shows -> {
           if (shows.isEmpty()) {
-            new AlertDialog.Builder(this)
+            new CadenceDialogBuilder(this)
                 .setTitle("No public feed found")
                 .setMessage(
                     "Try the show name or paste its RSS feed. A Spotify-only show may not offer a"
@@ -2036,7 +2063,9 @@ public final class MainActivity extends Activity {
   }
 
   private void previewPodcast(String feed) {
+    int generation=searchGeneration;String origin=page;
     work("Loading podcast…", () -> Podcasts.feed(feed), show -> {
+      if(generation!=searchGeneration||!page.equals(origin))return;
       try { podcasts.preview(show); showPodcast(show); } catch (Exception e) { error("Podcast preview", e); }
     });
   }
@@ -2095,7 +2124,7 @@ public final class MainActivity extends Activity {
                   error("Saving subscriptions", e);
                 }
                 showPodcasts();
-                new AlertDialog.Builder(this)
+                new CadenceDialogBuilder(this)
                     .setTitle("Subscriptions updated")
                     .setMessage(
                         saved
@@ -2114,6 +2143,7 @@ public final class MainActivity extends Activity {
   private final java.util.Map<String, Button> downloadButtons = new java.util.HashMap<>();
 
   private void showPodcast(Podcasts.Show show) {
+    if(!page.equals("Show"))rememberScreen();
     shownShow = show;
     clear("Show", "");
     downloadButtons.clear();
@@ -2152,7 +2182,7 @@ public final class MainActivity extends Activity {
     actions.addView(button(subscribed ? "Subscribed ✓" : "Subscribe", !subscribed, () -> {
       try {
         if (podcasts.subscribed(show.feedUrl)) {
-          new AlertDialog.Builder(this).setTitle("Unsubscribe?")
+          new CadenceDialogBuilder(this).setTitle("Unsubscribe?")
               .setMessage("Your listening progress and downloads will be kept.")
               .setNegativeButton("Cancel", null).setPositiveButton("Unsubscribe", (d,n) -> {
                 try { podcasts.remove(show); showPodcast(show); } catch (Exception e) { error("Subscription", e); }
@@ -2248,7 +2278,7 @@ public final class MainActivity extends Activity {
             "more",
             "Episode options",
             () ->
-                new AlertDialog.Builder(this)
+                new CadenceDialogBuilder(this)
                     .setTitle(e.title)
                     .setItems(
                         new String[] {
@@ -2276,7 +2306,7 @@ public final class MainActivity extends Activity {
   }
 
   private void choosePodcastResume() {
-    new AlertDialog.Builder(this).setTitle("Resume podcasts from")
+    new CadenceDialogBuilder(this).setTitle("Resume podcasts from")
         .setSingleChoiceItems(new String[]{"Continue from latest · All devices","Continue on this device"},PodcastPositions.thisDeviceMode(this)?1:0,(d,n)-> {
           PodcastPositions.mode(this,n==1);d.dismiss();showProfile();
         }).setNegativeButton("Cancel",null).show();
@@ -2290,7 +2320,7 @@ public final class MainActivity extends Activity {
       var p=options.get(i);String name=i==0?"Continue from latest · "+p.name():i==1?"This device · "+BackupLabels.deviceName(this):p.name();
       labels[i]=name+"\n"+(p.done()?"Played":episodeProgressLabel(p.position(),e.duration))+"\n"+(p.updated()>0?BackupLabels.date(p.updated()):"No dated activity saved");
     }
-    return new AlertDialog.Builder(this).setTitle("Choose listening position").setAdapter(namedChoices(labels),(d,n)-> {
+    return new CadenceDialogBuilder(this).setTitle("Choose listening position").setAdapter(namedChoices(labels),(d,n)-> {
       var selected=options.get(n);
       try {
         if(controller!=null && currentTrack()!=null && currentTrack().podcast && currentTrack().episodeId.equals(e.id)) controller.pause();
@@ -2313,7 +2343,7 @@ public final class MainActivity extends Activity {
   private void downloadAction(Podcasts.Episode e) {
     PodcastStore.Download d = podcasts.download(e.id);
     if (d.complete || d.active) {
-      new AlertDialog.Builder(this)
+      new CadenceDialogBuilder(this)
           .setTitle(d.complete ? "Episode downloaded" : "Episode downloading")
           .setItems(
               new String[] {
@@ -2348,7 +2378,7 @@ public final class MainActivity extends Activity {
     if (podcasts == null) return;
     for (var kv : downloadButtons.entrySet())
       kv.getValue().setText(podcasts.download(kv.getKey()).label);
-    refreshSongDownloads(); refreshPlaylistDownload();
+    refreshSongDownloads(); refreshPlaylistDownload();refreshDownloadQueue();
   }
 
   private void updateSongBadge(DownloadBadge badge, Track track) {
@@ -2371,7 +2401,7 @@ public final class MainActivity extends Activity {
     if (track.sourceUrl.isEmpty()) { findMatch(track, playlist, () -> songDownloadAction(track, playlist)); return; }
     SongDownloads.State state = songDownloads.state(track);
     if (state.complete || state.active) {
-      new AlertDialog.Builder(this).setTitle(track.title)
+      new CadenceDialogBuilder(this).setTitle(track.title)
           .setItems(new String[] {state.complete ? "Play offline" : "Keep downloading",
               state.complete ? "Remove download" : "Cancel download"}, (dialog, which) -> {
             if (which == 0 && state.complete) play(track, List.of(track));
@@ -2605,7 +2635,7 @@ public final class MainActivity extends Activity {
               () -> {
                 List<Integer> future = upcoming();
                 int position = future.indexOf(index);
-                new AlertDialog.Builder(this)
+                new CadenceDialogBuilder(this)
                     .setTitle("Reorder song")
                     .setItems(
                         new String[] {"Move up", "Move down"},
@@ -2671,6 +2701,81 @@ public final class MainActivity extends Activity {
     result.addListener(() -> refreshQueue(true), this::runOnUiThread);
   }
 
+  private void showDownloadQueue() {
+    if(!page.equals("Download queue"))rememberScreen();
+    clear("Download queue","");body.addView(text("Download queue",32,INK,true));gap(8);
+    body.addView(text(DownloadPolicy.wifiOnly(this)?"Downloads use Wi-Fi only":"Downloads use Wi-Fi and mobile data",14,MUTED,false));gap(16);
+    allDownloadsToggle=button("Pause all",true,()->{
+      boolean pause=songDownloads.requests().stream().anyMatch(t->{SongDownloads.State state=songDownloads.state(t);return !state.complete&&!state.paused&&state.active;});
+      try{songDownloads.pauseAll(pause);refreshDownloadQueue();}catch(Exception e){error("Downloads",e);}
+    });body.addView(allDownloadsToggle,new LinearLayout.LayoutParams(-1,dp(48)));gap(16);
+    List<Track> requests=songDownloads.requests();
+    if(requests.isEmpty())emptyState(body,"download","Your download queue is empty","Download a song or choose Download all in a playlist to listen offline.","Open library",()->navigate("Library"),null,null);
+    for(Track track:requests) {
+      LinearLayout card=column();card.setPadding(dp(16),dp(16),dp(16),dp(16));card.setBackground(round(CARD,20));
+      LinearLayout heading=row();Artwork art=new Artwork(this);art.load(track.artwork);heading.addView(art,new LinearLayout.LayoutParams(dp(52),dp(52)));
+      LinearLayout labels=column();labels.setPadding(dp(12),0,0,0);
+      TextView title=text(track.title,16,INK,true);title.setMaxLines(2);title.setEllipsize(android.text.TextUtils.TruncateAt.END);labels.addView(title);labels.addView(text(track.artist,12,MUTED,false));heading.addView(labels,new LinearLayout.LayoutParams(0,-2,1));card.addView(heading);
+      TextView label=text("Queued",14,MUTED,false);label.setPadding(0,dp(12),0,dp(8));card.addView(label);
+      ProgressBar bar=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);bar.setMax(100);
+      bar.setProgressTintList(ColorStateList.valueOf(accent));bar.setProgressBackgroundTintList(ColorStateList.valueOf(palette.track()));bar.setIndeterminateTintList(ColorStateList.valueOf(accent));
+      card.addView(bar,new LinearLayout.LayoutParams(-1,dp(8)));
+      Button toggle=button("Pause",false,()->{
+        try{SongDownloads.State state=songDownloads.state(track);if(state.paused||!state.active)songDownloads.resume(track);else songDownloads.pause(track);refreshDownloadQueue();}
+        catch(Exception e){error("Download",e);}
+      });card.addView(toggle,new LinearLayout.LayoutParams(-1,dp(48)));
+      LinearLayout.LayoutParams size=new LinearLayout.LayoutParams(-1,-2);size.setMargins(0,0,0,dp(12));body.addView(card,size);
+      downloadRows.put(SongDownloads.key(track.sourceUrl),new DownloadRow(track,label,bar,toggle));
+    }
+    refreshDownloadQueue();
+  }
+
+  private void refreshDownloadQueue() {
+    if(!page.equals("Download queue")||allDownloadsToggle==null)return;
+    if(songDownloads.requests().size()!=downloadRows.size()){showDownloadQueue();return;}
+    boolean pending=false,running=false;
+    for(DownloadRow row:downloadRows.values()) {
+      SongDownloads.State state=songDownloads.state(row.track());
+      row.label().setText(state.label+(state.paused&&state.percent>=0?" · "+state.percent+"%":""));
+      row.bar().setIndeterminate(state.active&&!state.paused&&state.percent<0);
+      row.bar().setProgress(state.complete?100:Math.max(0,state.percent));
+      row.bar().setContentDescription(row.track().title+": "+state.label);
+      row.toggle().setVisibility(state.complete?View.GONE:View.VISIBLE);
+      row.toggle().setText(state.paused?"Resume":state.active?"Pause":"Retry");
+      row.toggle().setContentDescription((state.paused?"Resume ":state.active?"Pause ":"Retry ")+row.track().title);
+      pending|=!state.complete;running|=!state.complete&&!state.paused&&state.active;
+    }
+    allDownloadsToggle.setEnabled(pending);allDownloadsToggle.setAlpha(pending?1:.4f);
+    allDownloadsToggle.setText(running?"Pause all":"Resume all");
+  }
+
+  private void chooseDownloadConnection() {
+    String[] choices={"Wi-Fi only","Wi-Fi and mobile data"};
+    new CadenceDialogBuilder(this).setTitle("Download connection").setSingleChoiceItems(choices,DownloadPolicy.wifiOnly(this)?0:1,(dialog,index)->{
+      Preferences.get(this).edit().putBoolean("downloadsWifiOnly",index==0).apply();dialog.dismiss();
+      work("Updating downloads…",()->{songDownloads.connectionChanged();podcasts.connectionChanged();return true;},ignored->settings());
+    }).setNegativeButton("Cancel",null).show();
+  }
+
+  private void chooseColour() {
+    LinearLayout box=column();box.setPadding(dp(20),dp(12),dp(20),dp(12));
+    int chosen=UiStyle.preferences(this).getInt("colour",0xff80c9a4);float[] hsv=new float[3];Color.colorToHSV(chosen,hsv);
+    TextView preview=text("Cadence · Your colour",20,INK,true);preview.setTag("colourPreview");preview.setGravity(Gravity.CENTER);preview.setPadding(dp(12),dp(24),dp(12),dp(24));box.addView(preview);
+    box.addView(text("Hue",14,INK,true));SeekBar hue=new SeekBar(this);hue.setMax(359);hue.setProgress((int)hsv[0]);hue.setContentDescription("Colour hue");box.addView(hue,new LinearLayout.LayoutParams(-1,dp(48)));
+    box.addView(text("Saturation",14,INK,true));SeekBar saturation=new SeekBar(this);saturation.setMax(100);saturation.setProgress((int)(hsv[1]*100));saturation.setContentDescription("Colour saturation");box.addView(saturation,new LinearLayout.LayoutParams(-1,dp(48)));
+    EditText hex=input("Hex colour (#RRGGBB)",String.format(java.util.Locale.ROOT,"#%06X",chosen&0xffffff));hex.setSingleLine(true);box.addView(hex);
+    final boolean[] updating={false};final int[] selected={chosen};
+    Runnable updatePreview=()->{UiStyle.Palette sample=UiStyle.scheme(selected[0],palette.light());preview.setTextColor(sample.onAccent());preview.setBackground(round(sample.accent(),16));hue.setProgressTintList(ColorStateList.valueOf(sample.accent()));hue.setThumbTintList(ColorStateList.valueOf(sample.accent()));saturation.setProgressTintList(ColorStateList.valueOf(sample.accent()));saturation.setThumbTintList(ColorStateList.valueOf(sample.accent()));};
+    SeekBar.OnSeekBarChangeListener listener=new SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}public void onProgressChanged(SeekBar b,int progress,boolean user){if(!user)return;selected[0]=Color.HSVToColor(new float[]{hue.getProgress(),saturation.getProgress()/100f,1});updating[0]=true;hex.setText(String.format(java.util.Locale.ROOT,"#%06X",selected[0]&0xffffff));updating[0]=false;updatePreview.run();}};
+    hue.setOnSeekBarChangeListener(listener);saturation.setOnSeekBarChangeListener(listener);
+    hex.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int d){}public void afterTextChanged(android.text.Editable e){}public void onTextChanged(CharSequence value,int a,int b,int c){if(updating[0])return;String colour=value.toString();if(colour.matches("#[0-9a-fA-F]{6}")){selected[0]=Color.parseColor(colour);float[] pick=new float[3];Color.colorToHSV(selected[0],pick);hue.setProgress((int)pick[0]);saturation.setProgress((int)(pick[1]*100));updatePreview.run();}}});
+    updatePreview.run();ScrollView scroll=new ScrollView(this);scroll.addView(box);
+    AlertDialog dialog=new CadenceDialogBuilder(this).setTitle("Colour scheme").setView(scroll).setNegativeButton("Cancel",null)
+        .setNeutralButton("Reset to mint",(d,n)->{UiStyle.preferences(this).edit().remove("colour").apply();CadenceWidget.updateAll(this);recreate();})
+        .setPositiveButton("Apply",null).create();
+    dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{if(!hex.getText().toString().matches("#[0-9a-fA-F]{6}")){hex.setError("Use #RRGGBB");return;}UiStyle.preferences(this).edit().putInt("colour",selected[0]).apply();CadenceWidget.updateAll(this);dialog.dismiss();recreate();}));dialog.show();
+  }
+
   private void settings() {
     clear("Settings", "");
     body.addView(text("Settings", 32, INK, true)); gap(6);
@@ -2686,10 +2791,14 @@ public final class MainActivity extends Activity {
     android.widget.Switch autoplay = new android.widget.Switch(this);
     autoplay.setContentDescription("Autoplay related songs");
     autoplay.setThumbTintList(new ColorStateList(new int[][] {new int[] {android.R.attr.state_checked}, new int[] {}}, new int[] {accent, MUTED}));
+    autoplay.setTrackTintList(new ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{palette.outline(),palette.track()}));
     autoplay.setChecked(Preferences.get(this).getBoolean("autoplay", true));
     autoplay.setOnCheckedChangeListener((v, checked) -> Preferences.get(this).edit().putBoolean("autoplay", checked).apply());
     auto.addView(autoplay, new LinearLayout.LayoutParams(dp(52), dp(48)));
     auto.setOnClickListener(v -> autoplay.setChecked(!autoplay.isChecked()));
+    LinearLayout downloads=settingsGroup("Downloads");
+    settingRow(downloads,"download","Download connection",DownloadPolicy.wifiOnly(this)?"Wi-Fi only":"Wi-Fi and mobile data",this::chooseDownloadConnection);
+    settingDivider(downloads);settingRow(downloads,"download","Download queue","Progress, pause and resume for each song",this::showDownloadQueue);
     LinearLayout saved = settingsGroup("Your library");
     settingRow(saved, "backup", "Save backup", "Playlists, podcasts & listening progress", () -> {
       Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
@@ -2703,6 +2812,8 @@ public final class MainActivity extends Activity {
     LinearLayout personal = settingsGroup("Personalise");
     settingRow(personal,"palette","Theme",UiStyle.theme(this),this::chooseTheme);
     settingDivider(personal);
+    settingRow(personal,"palette","Colour scheme",UiStyle.preferences(this).contains("colour")?"Custom colour":"Cadence mint",this::chooseColour);
+    settingDivider(personal);
     appearanceSwitch(personal,"Motion","Subtle screen transitions and loading animation","motion");
     settingDivider(personal);
     appearanceSwitch(personal,"Touch feedback","Gentle haptics, following your phone’s settings","haptics");
@@ -2715,7 +2826,7 @@ public final class MainActivity extends Activity {
     LinearLayout about = settingsGroup("About");
     settingRow(about, "info", "Playback diagnostics", "Connection, queue & playback details", this::diagnostics);
     gap(4);
-    TextView version = text("Cadence 2.3", 13, MUTED, false); version.setGravity(Gravity.CENTER); body.addView(version);
+    TextView version = text("Cadence 2.4.1", 13, MUTED, false); version.setGravity(Gravity.CENTER); body.addView(version);
   }
 
   private LinearLayout settingsGroup(String title) {
@@ -2755,7 +2866,7 @@ public final class MainActivity extends Activity {
     List<String> selected = new ArrayList<>(Preferences.languages(this));
     boolean[] checked = new boolean[Preferences.LANGUAGES.length];
     for (int i=0;i<checked.length;i++) checked[i]=selected.contains(Preferences.LANGUAGES[i]);
-    AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Discovery languages")
+    AlertDialog dialog = new CadenceDialogBuilder(this).setTitle("Discovery languages")
       .setMultiChoiceItems(Preferences.LANGUAGES,checked,(d,n,value) -> {
         if(value) selected.add(Preferences.LANGUAGES[n]); else selected.remove(Preferences.LANGUAGES[n]);
       }).setNegativeButton("Cancel",null).setPositiveButton("Save",null).create();
@@ -2771,7 +2882,7 @@ public final class MainActivity extends Activity {
     String[] choices = new String[12]; choices[0]="Off";
     for(int i=1;i<choices.length;i++) choices[i]=(i+4)+" seconds";
     int current=Preferences.crossfade(this);
-    new AlertDialog.Builder(this).setTitle("Crossfade songs")
+    new CadenceDialogBuilder(this).setTitle("Crossfade songs")
       .setSingleChoiceItems(choices,current==0?0:current-4,(d,n)-> {
         Preferences.get(this).edit().putInt("crossfade",n==0?0:n+4).apply(); d.dismiss(); settings();
       }).setNegativeButton("Cancel",null).show();
@@ -2779,7 +2890,7 @@ public final class MainActivity extends Activity {
 
   private void diagnostics() {
     String report =
-        "Cadence 2.3\nAndroid "
+        "Cadence 2.4.1\nAndroid "
             + Build.VERSION.RELEASE
             + " · "
             + Build.MANUFACTURER
@@ -2796,7 +2907,7 @@ public final class MainActivity extends Activity {
                     + controller.getMediaItemCount())
             + "\n\nLast error:\n"
             + lastError;
-    new AlertDialog.Builder(this)
+    new CadenceDialogBuilder(this)
         .setTitle("Playback diagnostics")
         .setMessage(report)
         .setPositiveButton(
@@ -2816,7 +2927,7 @@ public final class MainActivity extends Activity {
     float speed = getSharedPreferences("playback", 0).getFloat("podcastSpeed", 1f);
     int selected = 1;
     for (int i = 0; i < values.length; i++) if (Math.abs(speed - values[i]) < 0.01) selected = i;
-    new AlertDialog.Builder(this)
+    new CadenceDialogBuilder(this)
         .setTitle("Podcast playback speed")
         .setSingleChoiceItems(
             labels,
@@ -2836,6 +2947,8 @@ public final class MainActivity extends Activity {
   }
 
   private <T> void work(String label, Callable<T> task, Consumer<T> done) {
+    int ownerGeneration=searchGeneration;String ownerPage=page;
+    boolean detailRequest=label.equals("Loading collection…")||label.equals("Loading podcast…");
     status.setText(label);
     status.setVisibility(View.VISIBLE);
     workers.execute(
@@ -2844,6 +2957,7 @@ public final class MainActivity extends Activity {
             T value = task.call();
             ui.post(
                 () -> {
+                  if(detailRequest&&(ownerGeneration!=searchGeneration||!ownerPage.equals(page)))return;
                   if (!destroyed) {
                     status.setText("");
                     status.setVisibility(View.GONE);
@@ -2853,7 +2967,8 @@ public final class MainActivity extends Activity {
           } catch (Exception e) {
             ui.post(
                 () -> {
-                  if(!destroyed){if(label.startsWith("Loading")||label.startsWith("Finding")||label.startsWith("Reading")||label.startsWith("Refreshing")){status.setVisibility(View.GONE);lastError=e.getClass().getSimpleName()+": "+e.getMessage();new AlertDialog.Builder(this).setTitle("Let’s try that again").setMessage("We couldn’t finish "+label.replace("…","").toLowerCase(java.util.Locale.ROOT)+". Check your connection and try again.").setNegativeButton("Close",null).setPositiveButton("Try again",(d,n)->work(label,task,done)).show();}else error(label.replace("…",""),e);}
+                  if(detailRequest&&(ownerGeneration!=searchGeneration||!ownerPage.equals(page)))return;
+                  if(!destroyed){if(label.startsWith("Loading")||label.startsWith("Finding")||label.startsWith("Reading")||label.startsWith("Refreshing")){status.setVisibility(View.GONE);lastError=e.getClass().getSimpleName()+": "+e.getMessage();new CadenceDialogBuilder(this).setTitle("Let’s try that again").setMessage("We couldn’t finish "+label.replace("…","").toLowerCase(java.util.Locale.ROOT)+". Check your connection and try again.").setNegativeButton("Close",null).setPositiveButton("Try again",(d,n)->work(label,task,done)).show();}else error(label.replace("…",""),e);}
                 });
           }
         });
@@ -2863,7 +2978,7 @@ public final class MainActivity extends Activity {
     lastError = e.getClass().getSimpleName() + ": " + e.getMessage();
     status.setText(title + " failed");
     status.setVisibility(View.GONE);
-    new AlertDialog.Builder(this)
+    new CadenceDialogBuilder(this)
         .setTitle(title)
         .setMessage(
             e.getMessage() == null
@@ -2918,7 +3033,7 @@ public final class MainActivity extends Activity {
     try {
       PlaylistDownloads.Summary state=PlaylistDownloads.summary(this,playlist.id);
       if(state.active()>0) {
-        new AlertDialog.Builder(this).setTitle("Cancel remaining downloads?").setMessage("Completed downloads will be kept. Your saved download list stays available for retry.")
+        new CadenceDialogBuilder(this).setTitle("Cancel remaining downloads?").setMessage("Completed downloads will be kept. Your saved download list stays available for retry.")
             .setNegativeButton("Keep downloading",null).setPositiveButton("Cancel remaining",(d,n)-> {
               try { PlaylistDownloads.cancel(this,playlist.id); refreshPlaylistDownload(); refreshSongDownloads(); } catch(Exception e) { error("Downloads",e); }
             }).show(); return;
@@ -3009,7 +3124,7 @@ public final class MainActivity extends Activity {
       }); auto.addView(enabled,new LinearLayout.LayoutParams(dp(52),dp(48)));
       settingDivider(cloud); settingRow(cloud,"restore","Choose backup to restore","Device names, dates and times",this::cloudRecovery);
       settingDivider(cloud); settingRow(cloud,"play","Continue listening","Resume the queue saved in Drive",this::resumeCloudQueue);
-      settingDivider(cloud); settingRow(cloud,"close","Sign out","Keep the current library on this phone",()->new AlertDialog.Builder(this).setTitle("Sign out of Google?")
+      settingDivider(cloud); settingRow(cloud,"close","Sign out","Keep the current library on this phone",()->new CadenceDialogBuilder(this).setTitle("Sign out of Google?")
           .setMessage("Sync will stop. Your current library remains on this phone.").setNegativeButton("Cancel",null).setPositiveButton("Sign out",(d,n)-> {
             try { CloudSync.signOut(this); googleLogin.clear(); refreshProfilePhoto(); showProfile(); } catch(Exception e) { error("Sign out",e); }
           }).show());
@@ -3020,7 +3135,7 @@ public final class MainActivity extends Activity {
   }
   private void acceptGoogleProfile(GoogleLogin.Profile profile) {
     if(profile.subject().equals(CloudSync.subject(this))) { googleLogin.connectDrive(); return; }
-    new AlertDialog.Builder(this).setTitle("Use this Google account?").setMessage("Choose how to start with "+profile.email()+". Your current library will be kept in a recovery copy on this phone.")
+    new CadenceDialogBuilder(this).setTitle("Use this Google account?").setMessage("Choose how to start with "+profile.email()+". Your current library will be kept in a recovery copy on this phone.")
         .setNegativeButton("Cancel",null).setNeutralButton("Choose cloud backup",(d,n)->activateProfile(profile,false))
         .setPositiveButton("Merge this library",(d,n)->activateProfile(profile,true)).show();
   }
@@ -3086,7 +3201,7 @@ public final class MainActivity extends Activity {
   private void cloudRecovery() {
     work("Reading cloud backups…",()->CloudSync.history(this),copies->{
       if(copies.isEmpty()) {
-        new AlertDialog.Builder(this).setTitle("No cloud backups yet").setMessage("There are no saved Cadence copies in this Google account. You can restore a backup file from Settings, or start syncing the library currently on this phone.")
+        new CadenceDialogBuilder(this).setTitle("No cloud backups yet").setMessage("There are no saved Cadence copies in this Google account. You can restore a backup file from Settings, or start syncing the library currently on this phone.")
             .setNegativeButton("Close",null).setPositiveButton("Start syncing this library",(d,n)-> {
               CloudSync.prefs(this).edit().putBoolean("chooseBackup",false).apply();CloudSync.periodic(this);CloudSync.syncNow(this);showProfile();
             }).show();return;
@@ -3104,9 +3219,9 @@ public final class MainActivity extends Activity {
   }
   private AlertDialog showBackupChoices(java.util.List<org.json.JSONObject> copies) {
     String[] labels=new String[copies.size()];for(int i=0;i<labels.length;i++)labels[i]=BackupLabels.cloud(copies.get(i));
-    return new AlertDialog.Builder(this).setTitle("Choose backup to restore").setAdapter(namedChoices(labels),(d,n)-> {
+    return new CadenceDialogBuilder(this).setTitle("Choose backup to restore").setAdapter(namedChoices(labels),(d,n)-> {
       org.json.JSONObject copy=copies.get(n);
-      new AlertDialog.Builder(this).setTitle("Restore selected backup?").setMessage(BackupLabels.cloud(copy)+"\n\nThis restores the selected library version. Device listening histories are kept. A recovery copy of this phone’s current library is saved first.")
+      new CadenceDialogBuilder(this).setTitle("Restore selected backup?").setMessage(BackupLabels.cloud(copy)+"\n\nThis restores the selected library version. Device listening histories are kept. A recovery copy of this phone’s current library is saved first.")
           .setNegativeButton("Cancel",null).setPositiveButton("Restore this backup",(dialog,which)-> {
             if(controller!=null) {controller.pause();controller.clearMediaItems();}
             work("Restoring selected backup…",()-> {CloudSync.restore(this,copy.getString("id"));return true;},ignored->{showProfile();toast("Selected backup restored");});
@@ -3150,28 +3265,45 @@ public final class MainActivity extends Activity {
 
   private void chooseTheme() {
     String[] choices={"Dark","Light","Follow device"};int selected=java.util.Arrays.asList(choices).indexOf(UiStyle.theme(this));
-    new AlertDialog.Builder(this).setTitle("Choose theme").setSingleChoiceItems(choices,selected,(d,n)->{UiStyle.preferences(this).edit().putString("theme",choices[n]).apply();d.dismiss();recreate();}).setNegativeButton("Cancel",null).show();
+    new CadenceDialogBuilder(this).setTitle("Choose theme").setSingleChoiceItems(choices,selected,(d,n)->{UiStyle.preferences(this).edit().putString("theme",choices[n]).apply();d.dismiss();recreate();}).setNegativeButton("Cancel",null).show();
   }
 
   private void appearanceSwitch(LinearLayout card,String title,String detail,String key) {
     LinearLayout item=settingRow(card,key.equals("motion")?"crossfade":"check",title,detail,null);
     android.widget.Switch toggle=new android.widget.Switch(this);toggle.setContentDescription(title);toggle.setChecked(UiStyle.preferences(this).getBoolean(key,true));
     toggle.setThumbTintList(new ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{accent,MUTED}));
+    toggle.setTrackTintList(new ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{palette.outline(),palette.track()}));
     toggle.setOnCheckedChangeListener((v,checked)->UiStyle.preferences(this).edit().putBoolean(key,checked).apply());item.addView(toggle,new LinearLayout.LayoutParams(dp(52),dp(48)));item.setBackground(ripple(Color.TRANSPARENT,16));item.setOnClickListener(v->toggle.setChecked(!toggle.isChecked()));
   }
 
   private void restoreScreen(Bundle state) {
     if(state==null){showHome();return;}searchText=state.getString("searchText","");searchFilter=state.getString("searchFilter","All");
+    homeTab=state.getString("homeTab","Music");
+    ArrayList<Bundle> history=state.getParcelableArrayList("screenHistory");if(history!=null){screenHistory.clear();screenHistory.addAll(history);}
+    if(state.containsKey("collection"))collectionEntry=new com.google.gson.Gson().fromJson(state.getString("collection"),MusicCatalog.Entry.class);
     String name=state.getString("page","Home");
-    if(name.equals("Settings"))settings();else if(name.equals("Profile"))showProfile();
+    if(name.equals("Collection")&&collectionEntry!=null){boolean previous=restoringScreen;restoringScreen=true;try{openCollection(collectionEntry);}finally{restoringScreen=previous;}}
+    else if(name.equals("Download queue"))showDownloadQueue();
+    else if(name.equals("Settings"))settings();else if(name.equals("Profile"))showProfile();
     else if(name.equals("Search")){showSearch();if(!searchText.isBlank()&&catalogResults.isEmpty())searchMusic();}
     else if(name.equals("Playlist")){String id=state.getString("playlist","");if(id.equals(SongDownloads.PLAYLIST_ID))showPlaylist(songDownloads.playlist());else {Library.Playlist found=library.playlists.stream().filter(x->x.id.equals(id)).findFirst().orElse(null);if(found!=null)showPlaylist(found);else showLibrary();}}
     else if(name.equals("Show")){String feed=state.getString("feed","");Podcasts.Show found=podcasts.knownShows().stream().filter(x->x.feedUrl.equals(feed)).findFirst().orElse(null);if(found!=null)showPodcast(found);else showPodcasts();}
-    else navigate(name);
+    else {boolean previous=restoringScreen;restoringScreen=true;try{navigate(name);}finally{restoringScreen=previous;}}
   }
 
-  @Override protected void onSaveInstanceState(Bundle out){super.onSaveInstanceState(out);out.putString("page",page);out.putString("searchText",searchText);out.putString("searchFilter",searchFilter);if(shownPlaylist!=null)out.putString("playlist",shownPlaylist.id);if(shownShow!=null)out.putString("feed",shownShow.feedUrl);}
-  @Override public void onConfigurationChanged(android.content.res.Configuration config){super.onConfigurationChanged(config);Bundle saved=new Bundle();onSaveInstanceState(saved);boolean playerOpen=playerDialog!=null;if(playerDialog!=null)playerDialog.dismiss();if(queueDialog!=null)queueDialog.dismiss();buildShell();restoreScreen(saved);if(playerOpen)openPlayer();updatePlayer();}
+  private void rememberScreen() {
+    if(restoringScreen)return;
+    Bundle saved=captureScreen();screenHistory.add(saved);
+  }
+  private Bundle captureScreen() {
+    Bundle out=new Bundle();out.putString("page",page);out.putString("searchText",searchText);out.putString("searchFilter",searchFilter);out.putString("homeTab",homeTab);
+    out.putInt("scroll",mainScroll==null?0:mainScroll.getScrollY());
+    if(collectionEntry!=null)out.putString("collection",new com.google.gson.Gson().toJson(collectionEntry));
+    if(shownPlaylist!=null)out.putString("playlist",shownPlaylist.id);if(shownShow!=null)out.putString("feed",shownShow.feedUrl);return out;
+  }
+
+  @Override protected void onSaveInstanceState(Bundle out){super.onSaveInstanceState(out);out.putAll(captureScreen());out.putParcelableArrayList("screenHistory",new ArrayList<>(screenHistory));}
+  @Override public void onConfigurationChanged(android.content.res.Configuration config){super.onConfigurationChanged(config);Bundle saved=new Bundle();onSaveInstanceState(saved);boolean playerOpen=playerDialog!=null;if(playerDialog!=null)playerDialog.dismiss();if(queueDialog!=null)queueDialog.dismiss();buildShell();restoringScreen=true;try{restoreScreen(saved);}finally{restoringScreen=false;}if(playerOpen)openPlayer();updatePlayer();}
 
   private void ask(String title, String hint, String value, Consumer<String> answer) {
     ask(title, hint, value, answer, null);
@@ -3185,7 +3317,7 @@ public final class MainActivity extends Activity {
     if (message != null) box.addView(text(message, 14, MUTED, false));
     box.addView(edit);
     AlertDialog dialog =
-        new AlertDialog.Builder(this)
+        new CadenceDialogBuilder(this)
             .setTitle(title)
             .setView(box)
             .setPositiveButton("Continue", null)
@@ -3250,6 +3382,8 @@ public final class MainActivity extends Activity {
     edit.setText(value);
     edit.setHint(hint);
     edit.setTextColor(INK);
+    edit.setHighlightColor(palette.ripple());
+    if(Build.VERSION.SDK_INT>=29&&edit.getTextCursorDrawable()!=null)edit.getTextCursorDrawable().setTint(accent);
     edit.setHintTextColor(MUTED);
     edit.setTextSize(15);
     edit.setPadding(dp(16),dp(16),dp(16),dp(16));edit.setMinimumHeight(dp(48));

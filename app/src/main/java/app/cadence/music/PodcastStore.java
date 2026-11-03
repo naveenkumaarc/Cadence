@@ -105,7 +105,12 @@ final class PodcastStore {
     CloudSync.changed(context);
   }
 
-  synchronized List<Podcasts.Show> subscriptions() { return new ArrayList<>(shows); }
+  synchronized List<Podcasts.Show> subscriptions() {
+    List<Podcasts.Show> sorted=new ArrayList<>(shows);
+    sorted.sort(Comparator.comparingLong((Podcasts.Show show)->show.episodes.stream()
+        .mapToLong(e->PodcastPositions.latest(context,e.id).updated()).max().orElse(0)).reversed());
+    return sorted;
+  }
 
   synchronized boolean subscribed(String feed) { return shows.stream().anyMatch(s -> s.feedUrl.equals(feed)); }
   synchronized List<Podcasts.Show> knownShows() {
@@ -322,7 +327,7 @@ final class PodcastStore {
             .setTitle(e.title)
             .setDescription(e.show)
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setAllowedOverMetered(true)
+            .setAllowedOverMetered(!DownloadPolicy.wifiOnly(context))
             .setAllowedOverRoaming(false)
             .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_PODCASTS, name);
     long id = dm.enqueue(request);
@@ -333,6 +338,13 @@ final class PodcastStore {
       dm.remove(id);
       jobs.remove(e.id);
       throw failure;
+    }
+  }
+
+  synchronized void connectionChanged() throws Exception {
+    for(Podcasts.Show show:knownShows())for(Podcasts.Episode episode:show.episodes)if(download(episode.id).active) {
+      Long job=jobs.remove(episode.id);if(job!=null)((DownloadManager)context.getSystemService(Context.DOWNLOAD_SERVICE)).remove(job);
+      startDownload(episode);
     }
   }
 

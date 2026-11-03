@@ -30,6 +30,12 @@ public final class CadenceWidget extends AppWidgetProvider {
     v.setImageViewResource(R.id.widget_back,podcast?R.drawable.widget_back15:R.drawable.widget_previous);
     v.setImageViewResource(R.id.widget_next,podcast?R.drawable.widget_forward15:R.drawable.widget_next);
     v.setProgressBar(R.id.widget_progress,1000,p.getInt("progress",0),false);
+    UiStyle.Palette palette=UiStyle.palette(c);
+    v.setTextColor(R.id.widget_title,palette.ink());v.setTextColor(R.id.widget_artist,palette.muted());
+    for(int control:new int[]{R.id.widget_back,R.id.widget_next})v.setInt(control,"setColorFilter",palette.ink());
+    v.setInt(R.id.widget_play,"setColorFilter",palette.accent());
+    v.setInt(R.id.widget_root,"setBackgroundColor",palette.raised());
+    if(Build.VERSION.SDK_INT>=31){v.setColorStateList(R.id.widget_progress,"setProgressTintList",android.content.res.ColorStateList.valueOf(palette.accent()));v.setColorStateList(R.id.widget_progress,"setProgressBackgroundTintList",android.content.res.ColorStateList.valueOf(palette.track()));}
     v.setOnClickPendingIntent(R.id.widget_open,PendingIntent.getActivity(c,0,new Intent(c,MainActivity.class),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE));
     for(int view:new int[]{R.id.widget_back,R.id.widget_play,R.id.widget_next}) {
       String action=view==R.id.widget_back?"back":view==R.id.widget_next?"next":"play";

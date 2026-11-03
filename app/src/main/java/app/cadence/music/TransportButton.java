@@ -68,11 +68,12 @@ final class TransportButton extends View {
       float radius = unit * .23f;
       paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(unit * .035f);
       paint.setStrokeCap(Paint.Cap.ROUND);
-      canvas.drawArc(x-radius, y-radius, x+radius, y+radius, forward ? -140 : -40, forward ? 290 : -290, false, paint);
-      float tipX = x + (forward ? -1 : 1) * radius * .77f;
-      float tipY = y - radius * .64f;
-      canvas.drawLine(tipX,tipY,tipX+(forward ? -.02f : .02f)*unit,tipY-unit*.12f,paint);
-      canvas.drawLine(tipX,tipY,tipX+(forward ? .12f : -.12f)*unit,tipY-unit*.01f,paint);
+      canvas.drawArc(x-radius, y-radius, x+radius, y+radius, -90, forward ? -285 : 285, false, paint);
+      float direction=forward?1:-1;
+      triangle.reset();triangle.moveTo(x,y-radius);
+      triangle.lineTo(x-direction*unit*.10f,y-radius-unit*.08f);
+      triangle.moveTo(x,y-radius);triangle.lineTo(x-direction*unit*.10f,y-radius+unit*.08f);
+      canvas.drawPath(triangle,paint);
       paint.setStyle(Paint.Style.FILL); paint.setTextSize(unit * .22f); paint.setTextAlign(Paint.Align.CENTER);
       paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
       canvas.drawText(Integer.toString(seconds), x, y - (paint.ascent()+paint.descent())/2, paint);
