@@ -113,7 +113,7 @@ final class UiStyle {
   static int radius(int requested) {
     if (requested <= RADIUS_SMALL) return RADIUS_SMALL;
     if (requested <= RADIUS_MEDIUM + 1) return RADIUS_MEDIUM;
-    if (requested <= RADIUS_ARTWORK + 2) return RADIUS_ARTWORK;
+    if (requested <= RADIUS_ARTWORK) return RADIUS_ARTWORK;
     if (requested <= RADIUS_CARD + 3) return RADIUS_CARD;
     if (requested <= RADIUS_SHEET + 4) return RADIUS_SHEET;
     return RADIUS_PILL;

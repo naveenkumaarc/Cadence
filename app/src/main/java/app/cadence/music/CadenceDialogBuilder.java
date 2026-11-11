@@ -15,14 +15,23 @@ final class CadenceDialogBuilder extends AlertDialog.Builder {
     decor.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener(){
       @Override public void onViewAttachedToWindow(View view){view.post(()->{
         UiStyle.Palette palette=UiStyle.palette(getContext());
-        dialog.getWindow().setBackgroundDrawable(UiStyle.shape(getContext(),palette.surface(),24));
+        dialog.getWindow().setBackgroundDrawable(
+            UiStyle.outlinedShape(getContext(),palette.surface(),palette.divider(),UiStyle.RADIUS_SHEET));
+        dialog.getWindow().setDimAmount(.42f);
+        dialog.getWindow().setElevation(0);
         tint(view,palette);
       });}
       @Override public void onViewDetachedFromWindow(View view){}
     });return dialog;
   }
   private static void tint(View view,UiStyle.Palette palette) {
-    if(view instanceof TextView text&&!"colourPreview".equals(view.getTag()))text.setTextColor(view instanceof Button?palette.accent():palette.ink());
+    if(view instanceof TextView text&&!"colourPreview".equals(view.getTag())) {
+      text.setTextColor(view instanceof Button?palette.accent():palette.ink());
+      if(view instanceof Button) {
+        view.setMinimumHeight(UiStyle.dp(view.getContext(),UiStyle.TOUCH));
+        text.setAllCaps(false); text.setTextSize(UiStyle.BODY);
+      }
+    }
     if(view instanceof EditText edit)edit.setHintTextColor(palette.muted());
     if(view instanceof CheckedTextView checked)checked.setCheckMarkTintList(ColorStateList.valueOf(palette.accent()));
     if(view instanceof CompoundButton button)button.setButtonTintList(ColorStateList.valueOf(palette.accent()));

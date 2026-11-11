@@ -114,7 +114,7 @@ public final class MainActivity extends Activity {
   private ListenableFuture<MediaController> controllerFuture;
   private List<Track> searchResults = new ArrayList<>();
   private Library.Playlist shownPlaylist;
-  private String homeTab="Music";
+  private String homeTab="All";
   private MusicCatalog.Entry collectionEntry;
   private final ArrayList<Bundle> screenHistory=new ArrayList<>();
   private boolean restoringScreen;
@@ -330,9 +330,9 @@ public final class MainActivity extends Activity {
           return insets;
         });
     LinearLayout header = row();
-    header.setPadding(dp(16), dp(8), dp(8), dp(8));
+    header.setPadding(dp(UiStyle.SCREEN_INSET), dp(UiStyle.SPACE_1), dp(UiStyle.SPACE_2), dp(UiStyle.SPACE_1));
     header.setGravity(Gravity.CENTER_VERTICAL);
-    TextView brand = text("Cadence", UiStyle.HEADING, INK, true);
+    TextView brand = text("Cadence", UiStyle.TITLE, INK, true);
     brand.setPadding(0, 0, 0, 0);
     brand.setGravity(Gravity.CENTER_VERTICAL);
     brand.setIncludeFontPadding(false);
@@ -357,7 +357,7 @@ public final class MainActivity extends Activity {
     scroll.setFillViewport(true);
     scroll.setClipToPadding(false);
     body = column();
-    body.setPadding(dp(16), dp(16), dp(16), dp(32));
+    body.setPadding(dp(UiStyle.SCREEN_INSET), dp(UiStyle.SPACE_4), dp(UiStyle.SCREEN_INSET), dp(UiStyle.SPACE_8));
     scroll.setVerticalScrollBarEnabled(false);
     scroll.addView(body);
     root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -367,7 +367,7 @@ public final class MainActivity extends Activity {
     status.setVisibility(View.GONE);
     root.addView(status);
     mini = column();
-    mini.setBackground(ripple(palette.raised(),16)); mini.setClipToOutline(true); mini.setElevation(dp(4));
+    mini.setBackground(ripple(palette.surface(),UiStyle.RADIUS_CARD)); mini.setClipToOutline(true); mini.setElevation(0);
     LinearLayout miniControls=row(); miniControls.setPadding(dp(8),dp(8),dp(4),dp(8));
     miniArt=new Artwork(this);miniArt.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
     miniControls.addView(miniArt,new LinearLayout.LayoutParams(dp(48),dp(48)));
@@ -382,12 +382,12 @@ public final class MainActivity extends Activity {
     mini.addView(miniControls);miniProgress=new MiniProgress(this);mini.addView(miniProgress,new LinearLayout.LayoutParams(-1,dp(3)));
     LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(-1,-2);mp.setMargins(dp(12),dp(4),dp(12),dp(8));root.addView(mini,mp);mini.setVisibility(View.GONE);
     navigation = row();
-    navigation.setBackgroundColor(BG);
-    navigation.setPadding(dp(4), dp(4), dp(4), dp(4));
+    navigation.setBackground(UiStyle.outlinedShape(this, BG, palette.divider(), 0));
+    navigation.setPadding(dp(UiStyle.SPACE_1), dp(UiStyle.SPACE_1), dp(UiStyle.SPACE_1), dp(UiStyle.SPACE_1));
     navIcons.clear();
     navLabels.clear();
-    String[] names = {"Home", "Search", "Library", "Podcasts"},
-        symbols = {"home", "search", "library", "podcasts"};
+    String[] names = {"Home", "Search", "Library", "Profile"},
+        symbols = {"home", "search", "library", "profile"};
     for (int i = 0; i < names.length; i++) {
       String name = names[i];
       LinearLayout tab = column();
@@ -401,9 +401,9 @@ public final class MainActivity extends Activity {
       label.setGravity(Gravity.CENTER);
       navLabels.put(name, label);
       tab.addView(label);
-      tab.setContentDescription(name);tab.setFocusable(true);tab.setBackground(ripple(Color.TRANSPARENT,16));
+      tab.setContentDescription(name + " tab");tab.setFocusable(true);tab.setBackground(ripple(Color.TRANSPARENT,UiStyle.RADIUS_CARD));
       label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);img.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-      tab.setOnClickListener(v -> {UiStyle.feedback(v);navigate(name);});
+      tab.setOnClickListener(v -> UiStyle.press(v, () -> navigate(name)));
       navigation.addView(tab, new LinearLayout.LayoutParams(0,dp(Math.max(64,40+20*getResources().getConfiguration().fontScale)),1));
     }
     root.addView(navigation);
@@ -419,8 +419,8 @@ public final class MainActivity extends Activity {
 
   private AppIcon icon(String name, String label, Runnable action) {
     AppIcon icon = new AppIcon(this, name, INK, label);
-    icon.setOnClickListener(v -> {UiStyle.feedback(v);action.run();});
-    icon.setBackground(ripple(Color.TRANSPARENT, 24));
+    icon.setOnClickListener(v -> UiStyle.press(v, action));
+    icon.setBackground(ripple(Color.TRANSPARENT, UiStyle.RADIUS_PILL));
     return icon;
   }
 
@@ -433,6 +433,7 @@ public final class MainActivity extends Activity {
       case "Library" -> showLibrary();
       case "Import" -> showImport();
       case "Podcasts" -> showPodcasts();
+      case "Profile" -> showProfile();
       default -> showHome();
     }
   }
@@ -442,7 +443,7 @@ public final class MainActivity extends Activity {
     if(changed&&status!=null&&(status.getText().toString().equals("Loading collection…")||status.getText().toString().equals("Loading podcast…"))){status.setText("");status.setVisibility(View.GONE);}
     if(mainScroll!=null&&changed)mainScroll.scrollTo(0,0);
     body.animate().cancel();body.setAlpha(1);body.setTranslationY(0);
-    if(changed&&UiStyle.motion(this)){body.setAlpha(0);body.setTranslationY(dp(8));body.animate().alpha(1).translationY(0).setDuration(160).start();}
+    if(changed&&UiStyle.motion(this)){body.setAlpha(0);body.setTranslationY(dp(UiStyle.SPACE_2));body.animate().alpha(1).translationY(0).setDuration(UiStyle.MOTION_STANDARD).start();}
     if(mainScroll!=null)mainScroll.setContentDescription(name+((name.equals("Home")||name.equals("Search"))?". Pull down to refresh":""));
     songBadges.clear(); songTimes.clear();
     episodePlayButtons.clear(); episodeProgress.clear(); episodeBars.clear(); displayedEpisodes.clear();
@@ -452,7 +453,7 @@ public final class MainActivity extends Activity {
     String selected =
         name.equals("Playlist")
             ? "Library"
-            : name.equals("Show") ? "Podcasts" : name.equals("Collection") ? "Home" : name;
+            : name.equals("Show") || name.equals("Podcasts") ? "Library" : name.equals("Collection") ? "Home" : name;
     if((name.equals("Collection")||name.equals("Show"))&&!screenHistory.isEmpty()) {
       String origin=screenHistory.get(0).getString("page",selected);if(navIcons.containsKey(origin))selected=origin;
     }
@@ -464,9 +465,12 @@ public final class MainActivity extends Activity {
 
   private void showHome() {
     clear("Home", "");
+    largeTitle("Cadence", greeting());
+    continueListeningCard();
     searchBox("Search songs, albums, artists or playlists", "", false);
     gap(14);
     LinearLayout filters = row();
+    filters.addView(chip("All", homeTab.equals("All"), () -> {homeTab="All";showHome();}));
     filters.addView(chip("Music", homeTab.equals("Music"), () -> {homeTab="Music";showHome();}));
     filters.addView(chip("Podcasts", homeTab.equals("Podcasts"), () -> {homeTab="Podcasts";showHome();}));
     body.addView(filters);
@@ -564,10 +568,10 @@ public final class MainActivity extends Activity {
 
   private void searchBox(String hint, String initial, boolean searchPage) {
     LinearLayout search = row();
-    search.setBackground(round(palette.raised(),28));
+    search.setBackground(round(palette.surface(),UiStyle.RADIUS_PILL));
     AppIcon searchMark = new AppIcon(this, "search", MUTED, "Search");
     searchMark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-    search.addView(searchMark, new LinearLayout.LayoutParams(dp(44), dp(52)));
+    search.addView(searchMark, new LinearLayout.LayoutParams(dp(UiStyle.TOUCH), dp(UiStyle.TOUCH)));
     EditText query = input(hint, initial);
     query.setBackgroundColor(Color.TRANSPARENT);
     query.setPadding(0, 0, dp(4), 0);
@@ -575,7 +579,7 @@ public final class MainActivity extends Activity {
     query.setSingleLine(true); query.setSelectAllOnFocus(true);
     query.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
     query.setContentDescription("Search music and podcasts");
-    search.addView(query, new LinearLayout.LayoutParams(0, dp(56), 1));
+    search.addView(query, new LinearLayout.LayoutParams(0, dp(UiStyle.TOUCH), 1));
     AppIcon clearQuery=icon("close","Clear search",()->{query.setText("");query.requestFocus();});
     clearQuery.setVisibility(initial.isEmpty()?View.GONE:View.VISIBLE);
     search.addView(clearQuery,new LinearLayout.LayoutParams(dp(48),dp(48)));
@@ -646,8 +650,8 @@ public final class MainActivity extends Activity {
 
   private Button chip(String title, boolean selected, Runnable action) {
     Button b = button(title, selected, action);
-    b.setTextSize(13);
-    b.setBackground(ripple(selected ? accent : CARD, 24));
+    b.setTextSize(UiStyle.FOOTNOTE);
+    b.setBackground(ripple(selected ? accent : palette.surface(), UiStyle.RADIUS_PILL));
     b.setMinWidth(0); b.setMinimumWidth(0);
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, dp(48));
     p.setMargins(0, 0, dp(8), 0);
@@ -852,6 +856,7 @@ public final class MainActivity extends Activity {
 
   private void showSearch() {
     clear("Search", "");
+    largeTitle("Search", "Find music, artists, playlists and podcasts.");
     searchBox("What do you want to listen to?", searchText, true);
     gap(16);
     android.widget.HorizontalScrollView sc = new android.widget.HorizontalScrollView(this);
@@ -950,7 +955,7 @@ public final class MainActivity extends Activity {
   private void showLibrary() {
     shownPlaylist = null;
     clear("Library", "Keep the good ones");
-    body.addView(text("Your library", 32, INK, true));
+    largeTitle("Library", "Everything you saved, followed or downloaded.");
     gap(14);
     body.addView(
         button(
@@ -1939,7 +1944,7 @@ public final class MainActivity extends Activity {
     shownShow = null;
     clear("Podcasts", "");
     LinearLayout heading = row();
-    heading.addView(text("Podcasts", 32, INK, true), new LinearLayout.LayoutParams(0, -2, 1));
+    heading.addView(text("Podcasts", UiStyle.DISPLAY, INK, true), new LinearLayout.LayoutParams(0, -2, 1));
     heading.addView(
         icon(
             "plus",
@@ -2778,7 +2783,7 @@ public final class MainActivity extends Activity {
 
   private void settings() {
     clear("Settings", "");
-    body.addView(text("Settings", 32, INK, true)); gap(6);
+    body.addView(text("Settings", UiStyle.DISPLAY, INK, true)); gap(6);
     body.addView(text("Make Cadence feel like you.", 15, MUTED, false)); gap(24);
     LinearLayout account = settingsGroup("Profile & sync");
     settingRow(account,"info",profileName(),CloudSync.subject(this).isEmpty()?"Optional Google sign-in · Save your library online":CloudSync.prefs(this).getString("email",""),this::showProfile);
@@ -3072,7 +3077,7 @@ public final class MainActivity extends Activity {
     view.load(CloudSync.prefs(this).getString("googlePhoto",""));
   }
   private void showProfile() {
-    clear("Profile",""); body.addView(text("Your profile",32,INK,true)); gap(20);
+    clear("Profile",""); largeTitle("Profile", "Your identity, devices and continuity.");
     LinearLayout identity=row(); identity.setPadding(0,dp(8),0,dp(16));
     Artwork photo=new Artwork(this); photo.circle(); photo.setContentDescription("Change profile photo"); loadProfilePhoto(photo);
     photo.setOnClickListener(v->chooseProfilePhoto()); identity.addView(photo,new LinearLayout.LayoutParams(dp(72),dp(72)));
@@ -3353,14 +3358,58 @@ public final class MainActivity extends Activity {
     return layout;
   }
 
+  private void largeTitle(String title, String subtitle) {
+    TextView heading = text(title, UiStyle.DISPLAY, INK, true);
+    heading.setPadding(0, dp(UiStyle.SPACE_2), 0, dp(UiStyle.SPACE_1));
+    body.addView(heading);
+    if (subtitle != null && !subtitle.isBlank()) {
+      TextView detail = text(subtitle, UiStyle.BODY, MUTED, false);
+      detail.setPadding(0, 0, 0, dp(UiStyle.SPACE_4));
+      body.addView(detail);
+    }
+  }
+
+  private String greeting() {
+    int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+    return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  }
+
+  private void continueListeningCard() {
+    Track track = currentTrack();
+    if (track == null || controller == null || controller.getMediaItemCount() == 0) return;
+    LinearLayout card = row();
+    card.setPadding(dp(UiStyle.SPACE_3), dp(UiStyle.SPACE_3), dp(UiStyle.SPACE_2), dp(UiStyle.SPACE_3));
+    card.setBackground(ripple(palette.surface(), UiStyle.RADIUS_CARD));
+    Artwork artwork = new Artwork(this); artwork.load(track.artwork);
+    artwork.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+    card.addView(artwork, new LinearLayout.LayoutParams(dp(64), dp(64)));
+    LinearLayout labels = column(); labels.setPadding(dp(UiStyle.SPACE_3), 0, dp(UiStyle.SPACE_2), 0);
+    labels.addView(text("Continue listening", UiStyle.FOOTNOTE, MUTED, false));
+    TextView title = text(track.title, UiStyle.HEADLINE, INK, true);
+    title.setSingleLine(true); title.setEllipsize(android.text.TextUtils.TruncateAt.END); labels.addView(title);
+    long duration = controller.getDuration(), position = controller.getCurrentPosition();
+    labels.addView(text(duration > 0 ? elapsed(Math.max(0, duration - position) / 1000) + " left" : track.artist,
+        UiStyle.FOOTNOTE, MUTED, false));
+    card.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
+    TransportButton play = new TransportButton(this,
+        controller.isPlaying() ? TransportButton.Icon.PAUSE : TransportButton.Icon.PLAY,
+        palette.onAccent(), accent, "Play or pause " + track.title);
+    play.setOnClickListener(v -> togglePlay());
+    card.addView(play, new LinearLayout.LayoutParams(dp(UiStyle.TOUCH), dp(UiStyle.TOUCH)));
+    card.setOnClickListener(v -> openPlayer());
+    LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+    params.setMargins(0, 0, 0, dp(UiStyle.SPACE_4)); body.addView(card, params);
+  }
+
   private TextView text(String value, float size, int colour, boolean bold) {
     TextView view = new TextView(this);
     view.setText(value);
     view.setTextSize(UiStyle.type(size));
     if(size>=21){androidx.core.view.ViewCompat.setAccessibilityHeading(view,true);view.setLetterSpacing(-.02f);}
+    else if(size>=17)view.setLetterSpacing(-.01f);
     view.setTextColor(colour);
-    view.setTypeface(Typeface.create("sans-serif", bold ? Typeface.BOLD : Typeface.NORMAL));
-    view.setLineSpacing(dp(4),1);
+    view.setTypeface(UiStyle.typeface(bold));
+    view.setLineSpacing(0,size<=18?1.44f:1.16f);
     return view;
   }
 
@@ -3368,12 +3417,13 @@ public final class MainActivity extends Activity {
     Button view = new Button(this);
     view.setText(value);
     view.setAllCaps(false);
-    view.setTextSize(14);
+    view.setTextSize(UiStyle.BODY);
     view.setTextColor(primary ? palette.onAccent() : INK);
-    view.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-    view.setBackground(ripple(primary ? accent : Color.TRANSPARENT, 24));
-    view.setPadding(dp(16),0,dp(16),0);view.setMinHeight(dp(48));view.setMinimumHeight(dp(48));
-    view.setOnClickListener(v -> {UiStyle.feedback(v);action.run();});
+    view.setTypeface(UiStyle.typeface(false));
+    view.setBackground(ripple(primary ? accent : palette.raised(), UiStyle.RADIUS_PILL));
+    view.setPadding(dp(UiStyle.SPACE_4),0,dp(UiStyle.SPACE_4),0);
+    view.setMinHeight(dp(UiStyle.TOUCH));view.setMinimumHeight(dp(UiStyle.TOUCH));
+    view.setOnClickListener(v -> UiStyle.press(v, action));
     return view;
   }
 
@@ -3385,9 +3435,10 @@ public final class MainActivity extends Activity {
     edit.setHighlightColor(palette.ripple());
     if(Build.VERSION.SDK_INT>=29&&edit.getTextCursorDrawable()!=null)edit.getTextCursorDrawable().setTint(accent);
     edit.setHintTextColor(MUTED);
-    edit.setTextSize(15);
-    edit.setPadding(dp(16),dp(16),dp(16),dp(16));edit.setMinimumHeight(dp(48));
-    edit.setBackground(round(CARD, 12));
+    edit.setTextSize(UiStyle.BODY);
+    edit.setPadding(dp(UiStyle.SPACE_4),dp(UiStyle.SPACE_3),dp(UiStyle.SPACE_4),dp(UiStyle.SPACE_3));
+    edit.setMinimumHeight(dp(UiStyle.TOUCH));
+    edit.setBackground(round(palette.surface(), UiStyle.RADIUS_PILL));
     return edit;
   }
 
@@ -3396,10 +3447,7 @@ public final class MainActivity extends Activity {
   }
 
   private GradientDrawable round(int colour, int radius) {
-    GradientDrawable shape = new GradientDrawable();
-    shape.setColor(colour);
-    shape.setCornerRadius(dp(radius));
-    return shape;
+    return UiStyle.shape(this, colour, UiStyle.radius(radius));
   }
 
   private void gap(int size) {
@@ -3408,7 +3456,7 @@ public final class MainActivity extends Activity {
   }
 
   private int dp(float value) {
-    return Math.round(value * getResources().getDisplayMetrics().density);
+    return UiStyle.dp(this, value);
   }
 
   private void toast(String message) {

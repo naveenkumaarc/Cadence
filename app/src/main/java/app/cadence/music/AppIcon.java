@@ -90,6 +90,20 @@ final class AppIcon extends View {
         canvas.drawArc(10, 7, 38, 35, 135, 270, false, p);
         canvas.drawRoundRect(21, 27, 27, 38, 3, 3, p);
       }
+      case "profile" -> {
+        canvas.drawCircle(24, 19, 6, p);
+        canvas.drawArc(14, 27, 34, 39, 190, 160, false, p);
+      }
+      case "timer" -> {
+        canvas.drawCircle(24, 25, 11, p);
+        canvas.drawLine(24, 25, 24, 18, p); canvas.drawLine(24, 25, 30, 28, p);
+        canvas.drawLine(20, 11, 28, 11, p); canvas.drawLine(24, 11, 24, 14, p);
+      }
+      case "equalizer" -> {
+        canvas.drawLine(15, 14, 15, 35, p); canvas.drawCircle(15, 22, 3, p);
+        canvas.drawLine(24, 14, 24, 35, p); canvas.drawCircle(24, 29, 3, p);
+        canvas.drawLine(33, 14, 33, 35, p); canvas.drawCircle(33, 19, 3, p);
+      }
       case "settings" -> {
         canvas.drawLine(13, 17, 19, 17, p); canvas.drawLine(25, 17, 35, 17, p);
         canvas.drawLine(13, 31, 25, 31, p); canvas.drawLine(31, 31, 35, 31, p);
