@@ -34,6 +34,8 @@ public final class PlaybackService extends MediaLibraryService {
   private final java.util.concurrent.ExecutorService networkTasks = java.util.concurrent.Executors.newFixedThreadPool(2);
   private final java.util.concurrent.ExecutorService libraryTasks = java.util.concurrent.Executors.newSingleThreadExecutor();
   private boolean radioLoading;
+  private long sleepAt;
+  private boolean sleepEndOfTrack;
   private boolean disposed;
   private String radioRequested = "";
   private String radioContextSeed = "";
@@ -53,7 +55,11 @@ public final class PlaybackService extends MediaLibraryService {
   private float duck = 1f;
   private final Runnable playbackTick = new Runnable() {
     public void run() {
-      if (focusHeld && crossfade != null) crossfade.tick();
+      if (sleepAt > 0 && android.os.SystemClock.elapsedRealtime() >= sleepAt) {
+        sleepAt=0;sleepEndOfTrack=false;
+        if(player!=null)player.pause();
+      }
+      if (focusHeld && crossfade != null && !sleepEndOfTrack) crossfade.tick();
       extendRadio();
       handler.postDelayed(this, 100);
     }
@@ -62,7 +68,9 @@ public final class PlaybackService extends MediaLibraryService {
   static final String ENQUEUE = "app.cadence.ENQUEUE",
       ARRANGE = "app.cadence.ARRANGE",
       MOVE = "app.cadence.MOVE",
-      RESTORE = "app.cadence.RESTORE";
+      RESTORE = "app.cadence.RESTORE",
+      SLEEP_TIMER = "app.cadence.SLEEP_TIMER",
+      EQUALIZER = "app.cadence.EQUALIZER";
   private final android.os.Handler handler =
       new android.os.Handler(android.os.Looper.getMainLooper());
   private final java.util.concurrent.ExecutorService disk =
@@ -175,6 +183,8 @@ public final class PlaybackService extends MediaLibraryService {
                                     new androidx.media3.session.SessionCommand(
                                         ARRANGE, android.os.Bundle.EMPTY))
                                 .add(new androidx.media3.session.SessionCommand(RESTORE,android.os.Bundle.EMPTY))
+                                .add(new androidx.media3.session.SessionCommand(SLEEP_TIMER,android.os.Bundle.EMPTY))
+                                .add(new androidx.media3.session.SessionCommand(EQUALIZER,android.os.Bundle.EMPTY))
                                 .add(
                                     new androidx.media3.session.SessionCommand(
                                         MOVE, android.os.Bundle.EMPTY))
@@ -276,6 +286,17 @@ public final class PlaybackService extends MediaLibraryService {
                       } else if (command.customAction.equals(ARRANGE)) {
                         prioritizeManual();
                         saveQueue();
+                      } else if (command.customAction.equals(SLEEP_TIMER)) {
+                        int minutes=args.getInt("minutes",0);
+                        sleepAt=minutes>0?android.os.SystemClock.elapsedRealtime()+minutes*60_000L:0;
+                        sleepEndOfTrack=args.getBoolean("endOfTrack",false);
+                        if(crossfade!=null)crossfade.cancel();
+                      } else if (command.customAction.equals(EQUALIZER)) {
+                        int audioSession=player.getAudioSessionId();
+                        if(audioSession==C.AUDIO_SESSION_ID_UNSET)throw new IllegalStateException("Audio session unavailable");
+                        android.os.Bundle result=new android.os.Bundle();result.putInt("audioSession",audioSession);
+                        return Futures.immediateFuture(new androidx.media3.session.SessionResult(
+                            androidx.media3.session.SessionResult.RESULT_SUCCESS,result));
                       } else
                         return MediaLibrarySession.Callback.super.onCustomCommand(
                             mediaSession, controller, command, args);
@@ -460,6 +481,9 @@ public final class PlaybackService extends MediaLibraryService {
           @Override
           public void onMediaItemTransition(MediaItem item, int reason) {
             if (owner != player) return;
+            if(reason==Player.MEDIA_ITEM_TRANSITION_REASON_AUTO&&sleepEndOfTrack){
+              sleepEndOfTrack=false;sleepAt=0;player.pause();player.seekTo(0);
+            }
             if (item != null
                 && item.mediaMetadata.extras != null
                 && item.mediaMetadata.extras.getBoolean("manualQueue", false)) {

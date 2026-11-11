@@ -1769,8 +1769,9 @@ public final class MainActivity extends Activity {
     playerState = text("", 12, MUTED, false); playerState.setGravity(Gravity.CENTER);
     surface.addView(playerState);
     musicExtras = row(); musicExtras.setPadding(0,dp(12),0,dp(8));
-    musicExtras.addView(icon("save", "Save to playlist", () -> { Track t = currentTrack(); if (t != null) choosePlaylist(t); }), new LinearLayout.LayoutParams(0,dp(48),1));
     musicExtras.addView(icon("download", "Download current song", () -> { Track t = currentTrack(); if (t != null) songDownloadAction(t, null); }), new LinearLayout.LayoutParams(0,dp(48),1));
+    musicExtras.addView(icon("timer", "Sleep timer", this::chooseSleepTimer),new LinearLayout.LayoutParams(0,dp(48),1));
+    musicExtras.addView(icon("equalizer", "Equalizer", this::openEqualizer),new LinearLayout.LayoutParams(0,dp(48),1));
     playerShuffle = icon("shuffle", "Shuffle", () -> {
       if (controller != null) { controller.setShuffleModeEnabled(!controller.getShuffleModeEnabled()); updatePlayer(); }
     });
@@ -1786,6 +1787,8 @@ public final class MainActivity extends Activity {
     surface.addView(musicExtras);
     podcastExtras = row(); podcastExtras.setGravity(Gravity.CENTER);
     podcastExtras.addView(button("Playback speed", false, this::chooseSpeed), new LinearLayout.LayoutParams(-2,dp(48)));
+    podcastExtras.addView(icon("timer","Sleep timer",this::chooseSleepTimer),new LinearLayout.LayoutParams(dp(48),dp(48)));
+    podcastExtras.addView(icon("equalizer","Equalizer",this::openEqualizer),new LinearLayout.LayoutParams(dp(48),dp(48)));
     podcastExtras.addView(icon("queue", "Open queue", this::showQueue), new LinearLayout.LayoutParams(dp(48), dp(48)));
     surface.addView(podcastExtras);
     LinearLayout recovery = row();
@@ -2820,6 +2823,10 @@ public final class MainActivity extends Activity {
     LinearLayout playback = settingsGroup("Playback");
     settingRow(playback, "crossfade", "Crossfade", Preferences.crossfade(this) == 0 ? "Off" : Preferences.crossfade(this) + " seconds", this::chooseCrossfade);
     settingDivider(playback);
+    settingRow(playback,"timer","Sleep timer","15, 30, 45, 60 minutes or end of track",this::chooseSleepTimer);
+    settingDivider(playback);
+    settingRow(playback,"equalizer","Equalizer","Android audio effects for the active session",this::openEqualizer);
+    settingDivider(playback);
     LinearLayout auto = settingRow(playback, "shuffle", "Autoplay", "Keep listening with related songs", null);
     android.widget.Switch autoplay = new android.widget.Switch(this);
     autoplay.setContentDescription("Autoplay related songs");
@@ -2977,6 +2984,40 @@ public final class MainActivity extends Activity {
             })
         .setNegativeButton("Close", null)
         .show();
+  }
+
+  private void chooseSleepTimer() {
+    if(controller==null){toast("Wait for the player to connect.");return;}
+    String[] labels={"Off","End of this track","15 minutes","30 minutes","45 minutes","60 minutes"};
+    int[] minutes={0,0,15,30,45,60};
+    new CadenceDialogBuilder(this).setTitle("Sleep timer").setItems(labels,(dialog,index)->{
+      Bundle args=new Bundle();args.putInt("minutes",minutes[index]);args.putBoolean("endOfTrack",index==1);
+      var result=controller.sendCustomCommand(new androidx.media3.session.SessionCommand(PlaybackService.SLEEP_TIMER,Bundle.EMPTY),args);
+      result.addListener(()->runOnUiThread(()->{
+        try{if(result.get().resultCode==androidx.media3.session.SessionResult.RESULT_SUCCESS)
+          toast(index==0?"Sleep timer off":index==1?"Playback will stop at the end of this track":"Playback will stop in "+minutes[index]+" minutes");
+          else toast("The sleep timer could not be changed.");}
+        catch(Exception e){toast("The sleep timer could not be changed.");}
+      }),this::runOnUiThread);
+    }).setNegativeButton("Cancel",null).show();
+  }
+
+  private void openEqualizer() {
+    if(controller==null||controller.getCurrentMediaItem()==null){toast("Play something before opening the equalizer.");return;}
+    var result=controller.sendCustomCommand(new androidx.media3.session.SessionCommand(PlaybackService.EQUALIZER,Bundle.EMPTY),Bundle.EMPTY);
+    result.addListener(()->{
+      try{
+        androidx.media3.session.SessionResult response=result.get();
+        int session=response.extras.getInt("audioSession",0);
+        if(response.resultCode!=androidx.media3.session.SessionResult.RESULT_SUCCESS||session==0)throw new IllegalStateException();
+        Intent intent=new Intent(android.media.audiofx.AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL)
+            .putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION,session)
+            .putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME,getPackageName())
+            .putExtra(android.media.audiofx.AudioEffect.EXTRA_CONTENT_TYPE,android.media.audiofx.AudioEffect.CONTENT_TYPE_MUSIC);
+        startActivity(intent);
+      }catch(android.content.ActivityNotFoundException unavailable){toast("This device does not provide an equalizer panel.");}
+      catch(Exception unavailable){toast("Start playback, then try the equalizer again.");}
+    },this::runOnUiThread);
   }
 
   private <T> void work(String label, Callable<T> task, Consumer<T> done) {
