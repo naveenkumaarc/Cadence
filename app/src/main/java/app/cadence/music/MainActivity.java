@@ -61,6 +61,8 @@ public final class MainActivity extends Activity {
   private RefreshScrollView mainScroll;
   private MiniProgress miniProgress;
   private android.widget.GridLayout libraryGrid;
+  private LinearLayout libraryResults;
+  private String libraryFilter="Playlists", libraryQuery="";
   private final Handler ui = new Handler(Looper.getMainLooper());
   private final ExecutorService workers = Executors.newFixedThreadPool(4);
   private final ExecutorService discoveryWorkers = Executors.newFixedThreadPool(2);
@@ -502,6 +504,11 @@ public final class MainActivity extends Activity {
         size.setMargins(0, 0, dp(12), 0); cards.addView(tile, size);
       }
       scroll.addView(cards); body.addView(scroll); gap(22);
+    }
+    if(homeTab.equals("All")&&!podcasts.subscriptions().isEmpty()) {
+      body.addView(text("Your podcasts",UiStyle.TITLE,INK,true));gap(12);
+      int count=0;for(Podcasts.Show show:podcasts.subscriptions()){podcastCard(body,show,()->showPodcast(show));if(++count==2)break;}
+      body.addView(button("See all podcasts",false,()->navigate("Podcasts")));gap(22);
     }
     android.widget.HorizontalScrollView langs = new android.widget.HorizontalScrollView(this);
     langs.setHorizontalScrollBarEnabled(false);
@@ -956,31 +963,51 @@ public final class MainActivity extends Activity {
     shownPlaylist = null;
     clear("Library", "Keep the good ones");
     largeTitle("Library", "Everything you saved, followed or downloaded.");
-    gap(14);
-    body.addView(
-        button(
-            "Create playlist",
-            true,
-            () ->
-                ask(
-                    "New playlist",
-                    "Playlist name",
-                    "",
-                    name -> {
-                      library.playlists.add(new Library.Playlist(name));
-                      save();
-                      showLibrary();
-                    })),
-        new LinearLayout.LayoutParams(-1, dp(50)));
-    gap(12);
-    body.addView(button("Import from file", false, this::showImport));
-    gap(8);body.addView(button("Download queue",false,this::showDownloadQueue));
-    gap(18);
-    if(getResources().getConfiguration().screenWidthDp>=600&&getResources().getConfiguration().fontScale<=1.3f){libraryGrid=new android.widget.GridLayout(this);libraryGrid.setColumnCount(2);body.addView(libraryGrid,new LinearLayout.LayoutParams(-1,-2));}
-    playlistCard(songDownloads.playlist());
-    try { Library.Playlist saved = DownloadList.playlist(this); if(!saved.tracks.isEmpty()) playlistCard(saved); } catch(Exception ignored) {}
-    for (Library.Playlist playlist : library.playlists) playlistCard(playlist);
-    if(library.playlists.stream().allMatch(p->p.tracks.isEmpty()))emptyState(body,"library","Make room for your favourites","Save songs from search or bring in a playlist you already love.","Find songs",()->navigate("Search"),"Import a playlist",this::showImport);
+    LinearLayout search=row();search.setBackground(round(palette.surface(),UiStyle.RADIUS_PILL));
+    AppIcon mark=new AppIcon(this,"search",MUTED,"");mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+    search.addView(mark,new LinearLayout.LayoutParams(dp(UiStyle.TOUCH),dp(UiStyle.TOUCH)));
+    EditText query=input("Search your library",libraryQuery);query.setBackgroundColor(Color.TRANSPARENT);
+    query.setSingleLine(true);search.addView(query,new LinearLayout.LayoutParams(0,dp(UiStyle.TOUCH),1));
+    AppIcon clear=icon("close","Clear library search",()->query.setText(""));
+    clear.setVisibility(libraryQuery.isBlank()?View.GONE:View.VISIBLE);
+    search.addView(clear,new LinearLayout.LayoutParams(dp(UiStyle.TOUCH),dp(UiStyle.TOUCH)));body.addView(search);gap(12);
+    android.widget.HorizontalScrollView filterScroll=new android.widget.HorizontalScrollView(this);
+    filterScroll.setHorizontalScrollBarEnabled(false);LinearLayout filters=row();
+    for(String filter:List.of("Playlists","Songs","Podcasts","Downloaded"))
+      filters.addView(chip(filter,libraryFilter.equals(filter),()->{libraryFilter=filter;renderLibraryContent();}));
+    filterScroll.addView(filters);body.addView(filterScroll);gap(18);
+    libraryResults=column();body.addView(libraryResults);
+    query.addTextChangedListener(new android.text.TextWatcher(){
+      public void beforeTextChanged(CharSequence s,int a,int b,int c){}
+      public void afterTextChanged(android.text.Editable value){}
+      public void onTextChanged(CharSequence value,int a,int b,int c){libraryQuery=value.toString();clear.setVisibility(value.length()==0?View.GONE:View.VISIBLE);renderLibraryContent();}
+    });
+    query.setSelection(query.length());renderLibraryContent();
+  }
+
+  private void renderLibraryContent() {
+    if(libraryResults==null)return;
+    libraryResults.removeAllViews();libraryGrid=null;LinearLayout outer=body;body=libraryResults;
+    String needle=libraryQuery.trim().toLowerCase(java.util.Locale.ROOT);
+    try {
+      if(libraryFilter.equals("Playlists")) {
+        body.addView(button("Create playlist",true,()->ask("New playlist","Playlist name","",name->{library.playlists.add(new Library.Playlist(name));save();showLibrary();})),new LinearLayout.LayoutParams(-1,dp(UiStyle.TOUCH)));
+        gap(8);body.addView(button("Import from file",false,this::showImport));gap(16);
+        if(getResources().getConfiguration().screenWidthDp>=600&&getResources().getConfiguration().fontScale<=1.3f){libraryGrid=new android.widget.GridLayout(this);libraryGrid.setColumnCount(2);body.addView(libraryGrid,new LinearLayout.LayoutParams(-1,-2));}
+        for(Library.Playlist playlist:library.playlists)if(needle.isEmpty()||(playlist.id.equals("favourites")?"liked songs":playlist.name).toLowerCase(java.util.Locale.ROOT).contains(needle))playlistCard(playlist);
+      } else if(libraryFilter.equals("Songs")) {
+        Library.Playlist liked=library.playlists.stream().filter(p->p.id.equals("favourites")).findFirst().orElse(null);
+        if(liked!=null)playlistCard(liked);
+      } else if(libraryFilter.equals("Podcasts")) {
+        body.addView(button("Find podcasts",true,()->navigate("Podcasts")),new LinearLayout.LayoutParams(-1,dp(UiStyle.TOUCH)));gap(12);
+        for(Podcasts.Show show:podcasts.subscriptions())if(needle.isEmpty()||show.title.toLowerCase(java.util.Locale.ROOT).contains(needle))podcastCard(body,show,()->showPodcast(show));
+      } else {
+        body.addView(button("Download queue",false,this::showDownloadQueue));gap(12);
+        Library.Playlist downloaded=songDownloads.playlist();if(needle.isEmpty()||downloaded.name.toLowerCase(java.util.Locale.ROOT).contains(needle))playlistCard(downloaded);
+        try{Library.Playlist saved=DownloadList.playlist(this);if(!saved.tracks.isEmpty()&&(needle.isEmpty()||saved.name.toLowerCase(java.util.Locale.ROOT).contains(needle)))playlistCard(saved);}catch(Exception ignored){}
+      }
+      if(body.getChildCount()==0)emptyState(body,"library","Nothing here yet","Try another filter or save something you love.","Find music",()->navigate("Search"),null,null);
+    } finally {body=outer;}
   }
 
   private void playlistCard(Library.Playlist playlist) {
@@ -1047,6 +1074,7 @@ public final class MainActivity extends Activity {
     Library.Playlist playlist = resolvePlaylist(requested);
     shownPlaylist = playlist;
     clear("Playlist", playlist.origin.isEmpty() ? "Your collection" : "Imported playlist");
+    if(!playlist.tracks.isEmpty()){Artwork cover=new Artwork(this);cover.load(playlist.tracks.get(0).artwork);cover.setContentDescription(playlist.name+" artwork");LinearLayout hero=row();hero.setGravity(Gravity.CENTER);hero.addView(cover,new LinearLayout.LayoutParams(dp(196),dp(196)));body.addView(hero);gap(22);}
     body.addView(text(playlist.name, 32, INK, true));
     gap(8);
     body.addView(text(playlist.tracks.size() + " songs", 13, MUTED, false));
@@ -1291,8 +1319,7 @@ public final class MainActivity extends Activity {
 
   private void showImport() {
     clear("Import", "");
-    body.addView(text("Import from file", 30, INK, true));
-    gap(14);
+    largeTitle("Import from file", "Bring playlists, podcasts and local audio into Cadence.");
     body.addView(text("Bring your collection", 20, INK, true));
     gap(10);
     body.addView(
@@ -1657,6 +1684,7 @@ public final class MainActivity extends Activity {
         new LinearLayout.LayoutParams(dp(48), dp(48)));
     surface.addView(top);
     playerArt = new Artwork(this);
+    playerArt.onPalette(colour -> surface.setBackgroundColor(playerTint(colour)));
     int artDp = Math.max(120, Math.min(320, Math.min(getResources().getConfiguration().screenWidthDp - 48,
         (int)(getResources().getConfiguration().screenHeightDp * .30f))));
     LinearLayout hero = row(); hero.setGravity(Gravity.CENTER);
@@ -2764,7 +2792,7 @@ public final class MainActivity extends Activity {
 
   private void chooseColour() {
     LinearLayout box=column();box.setPadding(dp(20),dp(12),dp(20),dp(12));
-    int chosen=UiStyle.preferences(this).getInt("colour",0xff80c9a4);float[] hsv=new float[3];Color.colorToHSV(chosen,hsv);
+    int chosen=UiStyle.preferences(this).getInt("colour",UiStyle.LIGHT.accent());float[] hsv=new float[3];Color.colorToHSV(chosen,hsv);
     TextView preview=text("Cadence · Your colour",20,INK,true);preview.setTag("colourPreview");preview.setGravity(Gravity.CENTER);preview.setPadding(dp(12),dp(24),dp(12),dp(24));box.addView(preview);
     box.addView(text("Hue",14,INK,true));SeekBar hue=new SeekBar(this);hue.setMax(359);hue.setProgress((int)hsv[0]);hue.setContentDescription("Colour hue");box.addView(hue,new LinearLayout.LayoutParams(-1,dp(48)));
     box.addView(text("Saturation",14,INK,true));SeekBar saturation=new SeekBar(this);saturation.setMax(100);saturation.setProgress((int)(hsv[1]*100));saturation.setContentDescription("Colour saturation");box.addView(saturation,new LinearLayout.LayoutParams(-1,dp(48)));
@@ -2776,7 +2804,7 @@ public final class MainActivity extends Activity {
     hex.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int d){}public void afterTextChanged(android.text.Editable e){}public void onTextChanged(CharSequence value,int a,int b,int c){if(updating[0])return;String colour=value.toString();if(colour.matches("#[0-9a-fA-F]{6}")){selected[0]=Color.parseColor(colour);float[] pick=new float[3];Color.colorToHSV(selected[0],pick);hue.setProgress((int)pick[0]);saturation.setProgress((int)(pick[1]*100));updatePreview.run();}}});
     updatePreview.run();ScrollView scroll=new ScrollView(this);scroll.addView(box);
     AlertDialog dialog=new CadenceDialogBuilder(this).setTitle("Colour scheme").setView(scroll).setNegativeButton("Cancel",null)
-        .setNeutralButton("Reset to mint",(d,n)->{UiStyle.preferences(this).edit().remove("colour").apply();CadenceWidget.updateAll(this);recreate();})
+        .setNeutralButton("Reset to blue",(d,n)->{UiStyle.preferences(this).edit().remove("colour").apply();CadenceWidget.updateAll(this);recreate();})
         .setPositiveButton("Apply",null).create();
     dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{if(!hex.getText().toString().matches("#[0-9a-fA-F]{6}")){hex.setError("Use #RRGGBB");return;}UiStyle.preferences(this).edit().putInt("colour",selected[0]).apply();CadenceWidget.updateAll(this);dialog.dismiss();recreate();}));dialog.show();
   }
@@ -2817,7 +2845,7 @@ public final class MainActivity extends Activity {
     LinearLayout personal = settingsGroup("Personalise");
     settingRow(personal,"palette","Theme",UiStyle.theme(this),this::chooseTheme);
     settingDivider(personal);
-    settingRow(personal,"palette","Colour scheme",UiStyle.preferences(this).contains("colour")?"Custom colour":"Cadence mint",this::chooseColour);
+    settingRow(personal,"palette","Colour scheme",UiStyle.preferences(this).contains("colour")?"Custom colour":"Action blue",this::chooseColour);
     settingDivider(personal);
     appearanceSwitch(personal,"Motion","Subtle screen transitions and loading animation","motion");
     settingDivider(personal);
@@ -3367,6 +3395,13 @@ public final class MainActivity extends Activity {
       detail.setPadding(0, 0, 0, dp(UiStyle.SPACE_4));
       body.addView(detail);
     }
+  }
+
+  private int playerTint(int artworkColour) {
+    int tinted=androidx.core.graphics.ColorUtils.blendARGB(BG,artworkColour,palette.light()?.10f:.18f);
+    for(int i=0;i<12&&androidx.core.graphics.ColorUtils.calculateContrast(INK,tinted)<4.5;i++)
+      tinted=androidx.core.graphics.ColorUtils.blendARGB(tinted,BG,.18f);
+    return tinted;
   }
 
   private String greeting() {
