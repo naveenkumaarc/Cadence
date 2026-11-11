@@ -17,7 +17,9 @@ Cadence provides matching Light, Dark and Follow device themes across Home, Sear
 - Optional Google Drive sync, named backups and compatible local backup/restore
 - Light, Dark and Follow device themes, custom accent colors, motion and touch-feedback controls
 
-The latest committed signed download remains Cadence 2.4.1: [APK](downloads/Cadence-2.4.1.apk) · [checksums](downloads/SHA256SUMS-2.4.1.txt). Version history and verification reports live in [docs](docs/). Future binary artifacts should move to GitHub Releases so the source checkout stays small; committed APKs and checksums are retained unchanged.
+Cadence 2.5.0 is available as an unsigned release build: [APK](downloads/Cadence-2.5.0-unsigned.apk) · [SHA-256](downloads/SHA256SUMS-2.5.0.txt). Sign it with your release key before installation or distribution. The latest committed signed download remains Cadence 2.4.1: [APK](downloads/Cadence-2.4.1.apk) · [SHA-256](downloads/SHA256SUMS-2.4.1.txt).
+
+Version history and verification reports live in [docs](docs/). Signed binary artifacts should move to GitHub Releases so the source checkout stays small; historical APKs and checksums are retained unchanged.
 
 ## Build
 
