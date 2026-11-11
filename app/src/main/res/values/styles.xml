@@ -1,17 +1,23 @@
 <resources>
     <style name="BaseAppTheme" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#9FDABB</item>
-        <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:windowBackground">#101214</item>
-        <item name="android:navigationBarColor">#101214</item>
-        <item name="android:statusBarColor">#101214</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorAccent">@color/cadence_accent_dark</item>
+        <item name="android:windowBackground">@color/cadence_background_dark</item>
+        <item name="android:statusBarColor">@color/cadence_background_dark</item>
+        <item name="android:navigationBarColor">@color/cadence_background_dark</item>
     </style>
     <style name="AppTheme" parent="BaseAppTheme" />
     <style name="AppLightTheme" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:fontFamily">sans</item><item name="android:colorAccent">#286B49</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowNoTitle">true</item>
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowBackground">#F5F8F6</item><item name="android:statusBarColor">#F5F8F6</item><item name="android:navigationBarColor">#F5F8F6</item>
+        <item name="android:colorAccent">@color/cadence_accent_light</item>
+        <item name="android:windowBackground">@color/cadence_background_light</item>
+        <item name="android:statusBarColor">@color/cadence_background_light</item>
+        <item name="android:navigationBarColor">@color/cadence_background_light</item>
     </style>
 </resources>

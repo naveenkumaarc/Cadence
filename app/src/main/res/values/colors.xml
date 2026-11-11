@@ -1,0 +1,12 @@
+<resources>
+    <color name="cadence_background_light">#FFFFFF</color>
+    <color name="cadence_surface_light">#F5F5F7</color>
+    <color name="cadence_ink_light">#1D1D1F</color>
+    <color name="cadence_muted_light">#6E6E73</color>
+    <color name="cadence_accent_light">#0066CC</color>
+    <color name="cadence_background_dark">#000000</color>
+    <color name="cadence_surface_dark">#1C1C1E</color>
+    <color name="cadence_ink_dark">#F5F5F7</color>
+    <color name="cadence_muted_dark">#AEAEB2</color>
+    <color name="cadence_accent_dark">#2997FF</color>
+</resources>
