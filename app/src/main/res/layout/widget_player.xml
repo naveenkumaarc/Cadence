@@ -6,7 +6,7 @@
       <TextView android:id="@+id/widget_artist" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Choose something to play" android:textColor="@color/cadence_muted_dark" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
     </LinearLayout>
   </LinearLayout>
-  <ProgressBar android:id="@+id/widget_progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="3dp" android:layout_marginTop="10dp" android:progressTint="@color/cadence_accent_dark" android:progressBackgroundTint="#48484A" />
+  <ProgressBar android:id="@+id/widget_progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="3dp" android:layout_marginTop="10dp" android:progressTint="@color/cadence_accent_dark" android:progressBackgroundTint="@color/cadence_widget_track" />
   <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:orientation="horizontal" android:paddingTop="4dp">
     <ImageButton android:id="@+id/widget_back" android:layout_width="64dp" android:layout_height="48dp" android:src="@drawable/widget_previous" android:background="@android:color/transparent" android:contentDescription="Previous or rewind" />
     <ImageButton android:id="@+id/widget_play" android:layout_width="64dp" android:layout_height="48dp" android:src="@drawable/widget_play" android:background="@android:color/transparent" android:contentDescription="Play or pause" />

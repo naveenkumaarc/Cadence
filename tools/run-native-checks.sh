@@ -8,4 +8,10 @@ adb logcat -d -v threadtime > artifacts/media-logcat.txt
 for picture in polish-library polish-empty polish-settings polish-player; do
   adb pull "/data/local/tmp/$picture.png" "artifacts/$picture.png" || true
 done
+for theme in light dark; do
+  for screen in home library settings player; do
+    picture="cadence25-$theme-$screen"
+    adb pull "/data/local/tmp/$picture.png" "artifacts/$picture.png" || true
+  done
+done
 exit "$status"

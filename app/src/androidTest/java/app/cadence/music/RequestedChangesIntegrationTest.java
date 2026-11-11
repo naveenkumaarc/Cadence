@@ -40,13 +40,15 @@ public class RequestedChangesIntegrationTest {
     });
     screenshot("search-back");
   }
-  @Test public void homeChipsStayOnHomeAndProfilePrecedesBrand()throws Exception {
+  @Test public void homeChipsStayOnHomeAndProfileTabPrecedesBrand()throws Exception {
     main(()->{
       View root=activity.getWindow().getDecorView();text(root,"Podcasts").performClick();
       assertEquals("Home",field("page"));assertEquals("Podcasts",field("homeTab"));
       text(activity.getWindow().getDecorView(),"Music").performClick();assertEquals("Home",field("page"));assertEquals("Music",field("homeTab"));
+      text(activity.getWindow().getDecorView(),"All").performClick();assertEquals("All",field("homeTab"));
       LinearLayout header=(LinearLayout)((LinearLayout)field("root")).getChildAt(0);
       assertEquals("Open your profile",header.getChildAt(0).getContentDescription());assertEquals("Cadence",((TextView)header.getChildAt(1)).getText());
+      assertNotNull(described(activity.getWindow().getDecorView(),"Profile tab"));
     });
     screenshot("home");
   }
@@ -93,6 +95,6 @@ public class RequestedChangesIntegrationTest {
   }
   private void screenshot(String name)throws Exception {
     android.os.SystemClock.sleep(350);instrumentation.waitForIdleSync();android.graphics.Bitmap bitmap=instrumentation.getUiAutomation().takeScreenshot();
-    assertNotNull(bitmap);try(java.io.FileOutputStream output=new java.io.FileOutputStream(new java.io.File(context.getExternalFilesDir(null),"cadence24-"+name+".png"))){bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output);}bitmap.recycle();
+    assertNotNull(bitmap);try(java.io.FileOutputStream output=new java.io.FileOutputStream(new java.io.File(context.getExternalFilesDir(null),"cadence25-"+name+".png"))){bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output);}bitmap.recycle();
   }
 }

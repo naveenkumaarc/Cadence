@@ -27,7 +27,7 @@ final class TransportButton extends View {
     this(
         context,
         Icon.PLAY,
-        android.graphics.Color.WHITE,
+        UiStyle.palette(context).ink(),
         android.graphics.Color.TRANSPARENT,
         "Play");
   }

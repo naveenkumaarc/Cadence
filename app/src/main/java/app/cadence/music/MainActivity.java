@@ -406,7 +406,7 @@ public final class MainActivity extends Activity {
       tab.setContentDescription(name + " tab");tab.setFocusable(true);tab.setBackground(ripple(Color.TRANSPARENT,UiStyle.RADIUS_CARD));
       label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);img.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
       tab.setOnClickListener(v -> UiStyle.press(v, () -> navigate(name)));
-      navigation.addView(tab, new LinearLayout.LayoutParams(0,dp(Math.max(64,40+20*getResources().getConfiguration().fontScale)),1));
+      navigation.addView(tab,new LinearLayout.LayoutParams(0,dp(UiStyle.bottomBarHeight(getResources().getConfiguration().fontScale)),1));
     }
     root.addView(navigation);
     android.widget.FrameLayout canvas=new android.widget.FrameLayout(this);canvas.setBackgroundColor(BG);
@@ -993,7 +993,7 @@ public final class MainActivity extends Activity {
       if(libraryFilter.equals("Playlists")) {
         body.addView(button("Create playlist",true,()->ask("New playlist","Playlist name","",name->{library.playlists.add(new Library.Playlist(name));save();showLibrary();})),new LinearLayout.LayoutParams(-1,dp(UiStyle.TOUCH)));
         gap(8);body.addView(button("Import from file",false,this::showImport));gap(16);
-        if(getResources().getConfiguration().screenWidthDp>=600&&getResources().getConfiguration().fontScale<=1.3f){libraryGrid=new android.widget.GridLayout(this);libraryGrid.setColumnCount(2);body.addView(libraryGrid,new LinearLayout.LayoutParams(-1,-2));}
+        if(UiStyle.libraryColumns(getResources().getConfiguration().screenWidthDp,getResources().getConfiguration().fontScale)==2){libraryGrid=new android.widget.GridLayout(this);libraryGrid.setColumnCount(2);body.addView(libraryGrid,new LinearLayout.LayoutParams(-1,-2));}
         for(Library.Playlist playlist:library.playlists)if(needle.isEmpty()||(playlist.id.equals("favourites")?"liked songs":playlist.name).toLowerCase(java.util.Locale.ROOT).contains(needle))playlistCard(playlist);
       } else if(libraryFilter.equals("Songs")) {
         Library.Playlist liked=library.playlists.stream().filter(p->p.id.equals("favourites")).findFirst().orElse(null);

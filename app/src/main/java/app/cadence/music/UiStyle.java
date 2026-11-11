@@ -119,6 +119,14 @@ final class UiStyle {
     return RADIUS_PILL;
   }
 
+  static int bottomBarHeight(float fontScale) {
+    return Math.max(64, Math.round(40 + 20 * fontScale));
+  }
+
+  static int libraryColumns(int widthDp, float fontScale) {
+    return widthDp >= 600 && fontScale <= 1.3f ? 2 : 1;
+  }
+
   static float type(float requested) {
     if (requested <= 12) return CAPTION;
     if (requested <= 13) return FOOTNOTE;

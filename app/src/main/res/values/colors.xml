@@ -9,4 +9,5 @@
     <color name="cadence_ink_dark">#F5F5F7</color>
     <color name="cadence_muted_dark">#AEAEB2</color>
     <color name="cadence_accent_dark">#2997FF</color>
+    <color name="cadence_widget_track">#48484A</color>
 </resources>
