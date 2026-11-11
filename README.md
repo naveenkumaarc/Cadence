@@ -1,109 +1,58 @@
-# Cadence 2.4.1
+# Cadence
 
-Android music and podcast player, Android 8 or newer. Dark Material-style surfaces, rounded cards, native Media3 playback and optional Google Drive continuity.
+Cadence is a native Android music and podcast player for Android 8 and newer. It combines Media3 playback, discovery, offline downloads, podcasts, Android Auto, a home-screen widget and optional Google Drive continuity in a focused light and dark interface.
 
-## Changes in 2.4
+## Screens
 
-Podcast library ordering, Search back navigation and podcast results, Home content filters, a card-based playlist picker, download connection preferences, a resumable song-download queue, custom colour schemes, corrected controls. Version 2.4.1 restores the previous launcher icon. [2.4 release notes](RELEASE-NOTES-2.4.md) · [2.4 verification](VERIFICATION-2.4.md).
+Cadence provides matching Light, Dark and Follow device themes across Home, Search, Library, Profile, detail pages, the full player, queue, sheets and settings. The instrumented UI suite captures Home, Player, Library and Settings in both themes; see [UI verification](docs/VERIFICATION-2.5.0.md) for the capture names and device checks.
 
-## Download Cadence 2.4.1
+## Features
 
-[**Download the signed Cadence 2.4.1 APK**](https://github.com/naveenkumaarc/Cadence/raw/refs/heads/main/downloads/Cadence-2.4.1.apk)
+- Music discovery, search, playlists, likes and local file import
+- Podcast subscriptions, downloads, progress, resume modes and playback speed
+- Media3 playback with queue editing, crossfade, sleep timer, equalizer access and audio-focus handling
+- Resumable song downloads with Wi-Fi controls and saved download requests
+- Android Auto browse and playback controls
+- Home-screen widget with artwork, progress and transport controls
+- Optional Google Drive sync, named backups and compatible local backup/restore
+- Light, Dark and Follow device themes, custom accent colors, motion and touch-feedback controls
 
-The original green equalizer icon is restored. Install over Cadence 2.x without uninstalling; your library and downloads are retained. [SHA-256 checksum](downloads/SHA256SUMS-2.4.1.txt) · [2.4.1 release notes](RELEASE-NOTES-2.4.1.md) · [Verification](VERIFICATION-2.4.1.md).
-
-## Earlier GitHub release (2.3)
-
-[**Download Cadence 2.3 APK**](https://github.com/naveenkumaarc/Cadence/releases/download/v2.3/Cadence-2.3.apk) · [Release, source archive and checksums](https://github.com/naveenkumaarc/Cadence/releases/tag/v2.3) · [Homepage](https://naveenkumaarc.github.io/Cadence/)
-
-**Using Cadence 2.0, 2.0.1, 2.1 or 2.2? Install this update over it without uninstalling.** The package and release signing key are retained. An in-place update from 2.2 was checked with a synthetic library, subscriptions and two episode positions.
-
-## New in 2.3
-
-- **Android Auto browse screen:** Home, Library, Podcasts and Continue listening are available alongside Now Playing. Home uses the same cached discovery shelves and language selection as the phone. Library includes liked songs, playlists, downloaded songs and saved download requests. Selecting a track expands its playlist or recommendation shelf while keeping the selected song. Album/playlist recommendations open their tracks; episodes resume their saved progress.
-- Car browse requests support the legacy subscription interface and unpaged requests. Cached recommendations and Library are available immediately; stale discovery refreshes in the background. Browsing the root does not need a network request. Android Auto provides its own driving interface rather than mirroring the phone screen.
-- **Mini player:** a thin progress bar follows the current song or episode, including seeks. Open the player to scrub or read the full time labels.
-- Shared colours, spacing and typography; consistent vertical overflow icons, ripple feedback, 48dp control targets, clearer long titles, larger text support, grouped settings and more spacious playlist/album cards.
-- Actionable empty states for playlists, downloads, Recents, podcasts and discovery/search failures. Shelves and search results use loading placeholders. Home has a visible Refresh control; pull down on Home or an active search to refresh. Search also has a refresh button. Clearing Recents confirms exactly what will be removed.
-- **Settings → Personalise:** Dark, Light or Follow device theme, plus Motion and Touch feedback switches. Dark remains the default. Motion follows Android animation settings; haptics follow the phone's system setting. These appearance choices stay on this phone.
-- Wider screens use a centred content area and a two-column library when text size permits. Rotation and theme changes retain the current library screen and search query, while the playback service continues independently.
-
-The package, signing key, Google sign-in scopes and backup format are retained. Install over 2.2 without uninstalling. [2.3 release notes](RELEASE-NOTES-2.3.md).
-
-## Features retained from 2.2
-
-- Podcast progress keeps an account-wide **Continue from latest** position and independent positions for each device. Change the default under **Profile → Podcast resume**, or use the restore-shaped icon on an episode to choose a particular saved position. Later rewinds count as newer activity; an unchanged paused checkpoint does not take over from another device.
-- **Profile → Choose backup to restore** lists each device's latest cloud copy and earlier recovery copies, with a device name, full date, time and time zone. Select the desired copy and confirm it. A **Before last restore** copy stays on this phone for undo. Restoring a library keeps the other devices' listening records.
-- New sign-ins can choose **Choose cloud backup** before automatic sync begins. Cancelling the picker leaves cloud data unchanged. **Merge this library** remains available for combining an existing phone library with the account.
-- Rename this phone under **Profile → Device name**. Future cloud copies and listening records use that label. Local backup filenames include the device name and date/time; their restore confirmation also shows this metadata.
-- **Sync now** starts a foreground request rather than joining an old retry chain. The profile shows progress, a full last-success timestamp and safe failure details. Background requests are coalesced. A failed optional recovery archive no longer blocks saving the current library.
-
-Previous backups remain readable. Older cloud copies without device metadata are labelled **Earlier Cadence device**, with their recorded file date where available. Earlier episode progress remains the account default; a reinstall has a new installation identity, so **This device** starts separately and the previous installation's record can be chosen explicitly. Device records are private to the signed-in account. Audio files do not sync.
-
-Upgrade every actively used phone to 2.2 for the full device-history experience. [2.2 release notes](RELEASE-NOTES-2.2.md).
-
-## Features retained from 2.1
-
-- Optional Google sign-in, automatic hidden Drive sync and **Sync now**. Profile, playlists, likes, selected CSV song versions and durations, podcast subscriptions, episode progress, playback preferences and the saved queue can continue on another phone.
-- The download request list syncs; actual audio files, device paths, file permissions and completed-download flags stay on each phone. **Downloaded** shows songs available on this phone. **Saved downloads** lets another phone download the requested songs and episodes.
-- Google name and photo appear by default. Change the Cadence name/photo from the small profile photo beside **Cadence**. These changes do not change the Google account.
-- **Download all** in playlists skips existing downloads and offers preparation status, retry and cancellation. CSV rows still needing a song match are identified before downloading.
-- Downloaded songs use a green circle with a white tick, including when the same version appears in another playlist.
-- Each podcast episode shows its own played/remaining minutes. Its round ▶ / Ⅱ button controls playback while keeping the episode list visible.
-
-Sign-in stays optional. Tap the profile photo → **Sign in with Google**, choose whether to merge the current phone library, then approve hidden Cadence Drive storage. Use the same Google account on another phone. Changes sync while connected when the app opens and when Android schedules background work; **Sync now** requests an immediate check. Sync does not start remote playback automatically: **Continue listening** explicitly restores the saved queue.
-
-Cloud settings include automatic-sync control, sign-out and recent recovery copies. Local JSON backup/restore remains available. [Privacy policy](https://naveenkumaarc.github.io/Cadence/privacy.html) · [Google configuration for maintainers/forks](GOOGLE-CONFIG.md) · [Release notes](RELEASE-NOTES-2.3.md) · [Verification and limits](VERIFICATION.md).
-
-Google Cloud is configured for an External audience with publishing status **In production**, basic profile permissions and the non-sensitive `drive.appdata` scope. Android and Web OAuth clients use the retained release certificate. This configuration is distinct from testing a real account's sign-in and two-phone sync; that live account check still needs to be performed on Google-enabled phones.
-
-## Playback and compatibility
-
-The 2.0.1 fixes for paused-service recovery, Bluetooth media buttons, audio focus, CSV song lengths, offline downloads, search filters and the player scrubber remain. Android Auto's MediaLibraryService exposes the library and playback controls. Automated browser-client and playback tests pass; a physical car and headset have not been tested for this release. A sideloaded app may need Android Auto's developer **Unknown sources** option before appearing in the car app list.
-
-New song downloads use persistent WorkManager requests and resumable partial files in app-specific storage. Episode downloads and transfers retained from older versions use Android's DownloadManager. Removing a download keeps playlist entries. Uninstalling removes private app data and app-specific audio downloads. Export a local backup before removing the app.
-
-## Original 0.3.1 migration
-
-The original 0.3.1 private signing key was not supplied. It cannot be recovered from its APK certificate. The retained key introduced with 2.0 cannot directly replace an installed 0.3.1 app.
-
-1. In 0.3.1, save a JSON backup outside app-private storage and verify that it contains your playlists. Keep a second copy.
-2. Only after checking the backup, uninstall 0.3.1 and install the new APK.
-3. In Cadence, choose **Settings → Restore backup** and select the JSON. Check your playlists, subscriptions and progress.
-4. Download offline audio again and reselect local files; audio and Android file permissions are not in the backup.
-
-The private signing kit stays outside the public source. Future updates must retain that key and increase `versionCode`. Version 2.4.1 uses package `app.cadence.player`, version code `11`.
-
-## Play Protect
-
-Google may ask to scan an unknown sideloaded app. A signing key or release build cannot guarantee Google's verdict. Allow Google's scan and follow its result. No Play Protect approval is claimed.
-
-The release is non-debuggable, targets API 35, uses APK v2/v3 signing and disables cleartext traffic. WorkManager adds boot recovery and Google's credential libraries declare system biometric permissions; Cadence does not request contacts, SMS, overlays, accessibility or app-install permissions.
+The latest committed signed download remains Cadence 2.4.1: [APK](downloads/Cadence-2.4.1.apk) · [checksums](downloads/SHA256SUMS-2.4.1.txt). Version history and verification reports live in [docs](docs/). Future binary artifacts should move to GitHub Releases so the source checkout stays small; committed APKs and checksums are retained unchanged.
 
 ## Build
 
-JDK 17, Android SDK platform 35/build-tools 35.0.0 and the included Gradle 8.11.1 wrapper. Configure the SDK with `ANDROID_HOME` or local.properties.
+Use JDK 17, Android SDK platform 35, build-tools 35.0.0 and the included Gradle 8.11.1 wrapper.
 
 ```sh
-./gradlew :core:test :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
-./gradlew :app:connectedDebugAndroidTest
+./gradlew :core:test :app:assembleDebug :app:lintDebug
 ```
 
-Keep release signing outside source control:
+Build an unsigned release without private signing material:
 
 ```sh
-export CADENCE_KEYSTORE=/private/path/cadence-release.jks
-export CADENCE_STORE_PASSWORD='your-private-password'
-# Alias: cadence; key password defaults to store password.
-./gradlew :app:assembleRelease :app:lintRelease
+./gradlew -PcadenceUnsigned :app:assembleRelease :app:lintRelease
 ```
 
-CI can build an unsigned release without a private key:
+Release signing remains external to the repository. Set `CADENCE_KEYSTORE`, `CADENCE_STORE_PASSWORD` and, when different, `CADENCE_KEY_PASSWORD`, then run `./gradlew :app:assembleRelease`. Never commit a keystore or password.
+
+Connected Android tests require an emulator or Android 8+ device:
 
 ```sh
-./gradlew -PcadenceUnsigned :core:test :app:assembleRelease :app:lintRelease
+./gradlew :app:assembleDebugAndroidTest :carprobe:assembleDebug
+bash tools/run-native-checks.sh
 ```
 
-An unsigned APK must be signed before installing. A debug APK cannot update a release-signed installation.
+## Repository
 
-GPL-3.0-or-later. See COPYING and THIRD_PARTY_NOTICES.md. The downloadable source archive includes corresponding NewPipeExtractor source in vendor/sources. Live streaming and device-specific behaviour require phone checks. VERIFICATION.md records the 2.3 checks; VERIFICATION-2.2.md, VERIFICATION-2.1.md, VERIFICATION-2.0.1.md and VERIFICATION-2.0.md retain the earlier reports.
+- `app/` — phone UI, playback service, downloads, sync, widget and Android Auto integration.
+- `core/` — platform-independent catalog, matching, import and networking logic.
+- `probe/` — a small JVM probe for extractor and catalog diagnostics.
+- `carprobe/` — an Android media-browser client used to verify the car browse tree.
+- `examples/` — sample import files.
+- `tools/` — repeatable transfer and connected-device verification helpers.
+
+Maintainer notes: [Google configuration](GOOGLE-CONFIG.md) · [privacy](PRIVACY.md) · [project structure](docs/PROJECT-STRUCTURE.md) · [2.5 release notes](docs/RELEASE-NOTES-2.5.0.md).
+
+## License
+
+Cadence is GPL-3.0-or-later. See [COPYING](COPYING) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Corresponding NewPipeExtractor source remains in `vendor/sources`.

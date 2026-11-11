@@ -2866,7 +2866,7 @@ public final class MainActivity extends Activity {
     LinearLayout about = settingsGroup("About");
     settingRow(about, "info", "Playback diagnostics", "Connection, queue & playback details", this::diagnostics);
     gap(4);
-    TextView version = text("Cadence 2.4.1", 13, MUTED, false); version.setGravity(Gravity.CENTER); body.addView(version);
+    TextView version = text("Cadence 2.5.0", 13, MUTED, false); version.setGravity(Gravity.CENTER); body.addView(version);
   }
 
   private LinearLayout settingsGroup(String title) {
@@ -2930,7 +2930,7 @@ public final class MainActivity extends Activity {
 
   private void diagnostics() {
     String report =
-        "Cadence 2.4.1\nAndroid "
+        "Cadence 2.5.0\nAndroid "
             + Build.VERSION.RELEASE
             + " · "
             + Build.MANUFACTURER
