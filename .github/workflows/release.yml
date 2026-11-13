@@ -1,0 +1,40 @@
+name: Publish GitHub release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Verify and publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          apk="downloads/Cadence-${version}.apk"
+          checksum="downloads/SHA256SUMS-${version}.txt"
+          install_notes="downloads/READ-BEFORE-INSTALLING-${version}.txt"
+          release_notes="docs/RELEASE-NOTES-${version}.md"
+
+          test -f "$apk"
+          test -f "$checksum"
+          test -f "$install_notes"
+          test -f "$release_notes"
+          (cd downloads && sha256sum --check "SHA256SUMS-${version}.txt")
+
+          gh release create "$GITHUB_REF_NAME" \
+            "$apk" \
+            "$checksum" \
+            "$install_notes" \
+            --verify-tag \
+            --latest \
+            --title "Cadence ${version}" \
+            --notes-file "$release_notes"
