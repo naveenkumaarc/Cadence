@@ -14,7 +14,7 @@ The following targets pass:
 - `:carprobe:assembleDebug`
 - `-PcadenceUnsigned :app:assembleRelease :app:lintRelease` (zero errors)
 
-The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk`. The unsigned release APK is generated at `app/build/outputs/apk/release/app-release-unsigned.apk`.
+The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk`. An unsigned release is generated with `-PcadenceUnsigned`; the published signed release is generated at `app/build/outputs/apk/release/app-release.apk` when the external signing environment is configured.
 
 The cloud worker blocks `jitpack.io` with HTTP 403. For this verification only, the pinned `NewPipeExtractor` `v0.26.5` tag and its pinned TeamNewPipe NanoJSON commit were compiled unchanged in `/tmp` and supplied through a temporary Gradle init script. The repository dependency declaration and all extractor, streaming and data-format code remain unchanged. A normal developer machine with JitPack access can run the README commands directly.
 
@@ -42,3 +42,7 @@ The artwork-tinted player uses a bounded sample of at most roughly 24 by 24 pixe
 The instrumentation APK compiles, and `tools/run-native-checks.sh` installs the car probe, runs the connected suite and pulls the eight theme captures. This cloud worker has no attached Android device and no `/dev/kvm`, so connected runtime tests, screenshots, TalkBack traversal and physical rotation were not executed here. Run the native-check script on an Android 8 or newer device before publishing a signed release.
 
 No permissions, database schema, backup format, Google Drive payload, package name or signing configuration changed in 2.5.0.
+
+## Release signature
+
+`downloads/Cadence-2.5.0.apk` verifies with APK Signature Scheme v2 and certificate SHA-256 `26d127669bb122cc6768726c3b8a4a2573e3edf62c10cc20d8d8e90a84c1024f`. This is the same certificate as `downloads/Cadence-2.4.1.apk`. The package remains `app.cadence.player`, and version code 12 is greater than the 2.4.1 version code 11, allowing an in-place update.

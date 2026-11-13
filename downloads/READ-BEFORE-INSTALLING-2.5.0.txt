@@ -1,0 +1,5 @@
+Cadence 2.5.0 is signed with the retained Cadence release key.
+Install Cadence-2.5.0.apk over Cadence 2.4 or 2.4.1 without uninstalling.
+Package: app.cadence.player. Version code: 12.
+Signer SHA-256: 26d127669bb122cc6768726c3b8a4a2573e3edf62c10cc20d8d8e90a84c1024f
+Back up important library and podcast progress before any application update.

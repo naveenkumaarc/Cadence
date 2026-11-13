@@ -6,4 +6,4 @@ Queue editing, crossfade, podcast speed, downloads, Android Auto, the widget, Go
 
 ## Download
 
-The repository includes the [unsigned 2.5.0 release APK](../downloads/Cadence-2.5.0-unsigned.apk) and its [SHA-256 checksum](../downloads/SHA256SUMS-2.5.0.txt). The APK must be signed with the maintainer's release key before installation or distribution.
+The repository includes the [signed 2.5.0 release APK](../downloads/Cadence-2.5.0.apk), its [SHA-256 checksum](../downloads/SHA256SUMS-2.5.0.txt) and [install notes](../downloads/READ-BEFORE-INSTALLING-2.5.0.txt). It uses the same release certificate as Cadence 2.4 and 2.4.1, so it can be installed as an in-place update.

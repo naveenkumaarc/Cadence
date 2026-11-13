@@ -1,1 +1,2 @@
+f89787db55be02de67c45f8ab3425145822cc9d2f57b7a271ae87d6dcde3ae9f  Cadence-2.5.0.apk
 5ffca0f08906dd102c19eeb05c8080f011a7af7fb92e2e4443857380b66cdb15  Cadence-2.5.0-unsigned.apk
