@@ -10,6 +10,6 @@
     <color name="cadence_muted_dark">#AEAEB2</color>
     <color name="cadence_accent_dark">#DA354B</color>
     <!-- Fixed launcher/widget brand mark; deliberately independent from the selectable accent. -->
-    <color name="cadence_brand">#2F5BE0</color>
+    <color name="cadence_brand">#E5384F</color>
     <color name="cadence_widget_track">#48484A</color>
 </resources>

@@ -10,6 +10,7 @@
         <item name="android:navigationBarColor">@color/cadence_background_dark</item>
     </style>
     <style name="AppTheme" parent="BaseAppTheme" />
+    <style name="AppStartingTheme" parent="AppTheme" />
     <style name="AppLightTheme" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowActionModeOverlay">true</item>

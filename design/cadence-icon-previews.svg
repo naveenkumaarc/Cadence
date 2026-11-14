@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650">
+  <rect width="1200" height="325" fill="#F5F5F7"/>
+  <rect y="325" width="1200" height="325" fill="#111113"/>
+  <g font-family="sans-serif" font-size="22" text-anchor="middle">
+    <g fill="#111113">
+      <text x="150" y="48">Circle</text><text x="450" y="48">Squircle</text>
+      <text x="750" y="48">Rounded square</text><text x="1050" y="48">Themed</text>
+    </g>
+    <g fill="#F5F5F7">
+      <text x="150" y="373">Circle</text><text x="450" y="373">Squircle</text>
+      <text x="750" y="373">Rounded square</text><text x="1050" y="373">Themed</text>
+    </g>
+  </g>
+
+  <!-- Light wallpaper launcher masks. -->
+  <g transform="translate(42 75) scale(2)">
+    <circle cx="54" cy="54" r="54" fill="#E5384F"/>
+    <g fill="none" stroke="#FFF" stroke-width="7" stroke-linecap="round">
+      <path d="M35 47.5V62.5M47 35V73M59 41.5V66.5M71 47.5V60.5"/>
+    </g>
+  </g>
+  <g transform="translate(342 75) scale(2)">
+    <path d="M54 0C92 0 108 16 108 54S92 108 54 108 0 92 0 54 16 0 54 0Z" fill="#E5384F"/>
+    <g fill="none" stroke="#FFF" stroke-width="7" stroke-linecap="round">
+      <path d="M35 47.5V62.5M47 35V73M59 41.5V66.5M71 47.5V60.5"/>
+    </g>
+  </g>
+  <g transform="translate(642 75) scale(2)">
+    <rect width="108" height="108" rx="22" fill="#E5384F"/>
+    <g fill="none" stroke="#FFF" stroke-width="7" stroke-linecap="round">
+      <path d="M35 47.5V62.5M47 35V73M59 41.5V66.5M71 47.5V60.5"/>
+    </g>
+  </g>
+  <g transform="translate(942 75) scale(2)">
+    <circle cx="54" cy="54" r="54" fill="#E2DCE0"/>
+    <g fill="none" stroke="#432A34" stroke-width="7" stroke-linecap="round">
+      <path d="M35 47.5V62.5M47 35V73M59 41.5V66.5M71 47.5V60.5"/>
+    </g>
+  </g>
+
+  <!-- Dark wallpaper launcher masks. -->
+  <g transform="translate(42 400) scale(2)">
+    <circle cx="54" cy="54" r="54" fill="#E5384F"/>
+    <g fill="none" stroke="#FFF" stroke-width="7" stroke-linecap="round">
+      <path d="M35 47.5V62.5M47 35V73M59 41.5V66.5M71 47.5V60.5"/>
+    </g>
+  </g>
+  <g transform="translate(342 400) scale(2)">
+    <path d="M54 0C92 0 108 16 108 54S92 108 54 108 0 92 0 54 16 0 54 0Z" fill="#E5384F"/>
+    <g fill="none" stroke="#FFF" stroke-width="7" stroke-linecap="round">
+      <path d="M35 47.5V62.5M47 35V73M59 41.5V66.5M71 47.5V60.5"/>
+    </g>
+  </g>
+  <g transform="translate(642 400) scale(2)">
+    <rect width="108" height="108" rx="22" fill="#E5384F"/>
+    <g fill="none" stroke="#FFF" stroke-width="7" stroke-linecap="round">
+      <path d="M35 47.5V62.5M47 35V73M59 41.5V66.5M71 47.5V60.5"/>
+    </g>
+  </g>
+  <g transform="translate(942 400) scale(2)">
+    <circle cx="54" cy="54" r="54" fill="#3B3035"/>
+    <g fill="none" stroke="#FFD9E1" stroke-width="7" stroke-linecap="round">
+      <path d="M35 47.5V62.5M47 35V73M59 41.5V66.5M71 47.5V60.5"/>
+    </g>
+  </g>
+</svg>

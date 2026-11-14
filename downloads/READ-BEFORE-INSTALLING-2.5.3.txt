@@ -1,0 +1,6 @@
+Cadence 2.5.3 is signed with the retained Cadence release key.
+Install Cadence-2.5.3.apk over an earlier release-signed Cadence installation without uninstalling.
+Package: app.cadence.player. Version code: 15.
+Signer SHA-256: 26d127669bb122cc6768726c3b8a4a2573e3edf62c10cc20d8d8e90a84c1024f
+APK SHA-256: b306e4a3af54462fefa8bb36a07b346c91b1a96424870bee0564bb1d83736566
+Back up important library and podcast progress before any application update.

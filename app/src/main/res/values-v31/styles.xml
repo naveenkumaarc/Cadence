@@ -1,0 +1,7 @@
+<resources>
+    <style name="AppStartingTheme" parent="AppTheme">
+        <item name="android:windowSplashScreenBackground">@color/cadence_background_dark</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_cadence_splash</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+    </style>
+</resources>

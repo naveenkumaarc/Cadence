@@ -1,5 +1,7 @@
 # Cadence
 
+<img src="design/cadence-icon-512.png" width="96" height="96" alt="Cadence Rose waveform icon">
+
 Cadence is a native Android music and podcast player for Android 8 and newer. It combines Media3 playback, discovery, offline downloads, podcasts, Android Auto, a home-screen widget and optional Google Drive continuity in a focused light and dark interface.
 
 ## Screens
@@ -17,7 +19,7 @@ Cadence provides matching Light, Dark and System themes across Home, Search, Lib
 - Optional Google Drive sync, named backups and compatible local backup/restore
 - Light, Dark and System themes, custom accent colors, motion and touch-feedback controls
 
-Cadence 2.5.2 is available as a signed update: [download APK](https://github.com/naveenkumaarc/Cadence/releases/download/v2.5.2/Cadence-2.5.2.apk) · [SHA-256](downloads/SHA256SUMS-2.5.2.txt) · [install notes](downloads/READ-BEFORE-INSTALLING-2.5.2.txt). It uses the retained release certificate and can update earlier release-signed Cadence installations without uninstalling.
+Cadence 2.5.3 is available as a signed update: [download APK](https://github.com/naveenkumaarc/Cadence/releases/download/v2.5.3/Cadence-2.5.3.apk) · [SHA-256](downloads/SHA256SUMS-2.5.3.txt) · [install notes](downloads/READ-BEFORE-INSTALLING-2.5.3.txt). It uses the retained release certificate and can update earlier release-signed Cadence installations without uninstalling.
 
 Version history and verification reports live in [docs](docs/). Future signed binary artifacts should move to GitHub Releases so the source checkout stays small; historical APKs and checksums are retained unchanged.
 
@@ -53,7 +55,7 @@ bash tools/run-native-checks.sh
 - `examples/` — sample import files.
 - `tools/` — repeatable transfer and connected-device verification helpers.
 
-Maintainer notes: [Google configuration](GOOGLE-CONFIG.md) · [privacy](PRIVACY.md) · [project structure](docs/PROJECT-STRUCTURE.md) · [2.5.2 release notes](docs/RELEASE-NOTES-2.5.2.md).
+Maintainer notes: [Google configuration](GOOGLE-CONFIG.md) · [privacy](PRIVACY.md) · [project structure](docs/PROJECT-STRUCTURE.md) · [2.5.3 release notes](docs/RELEASE-NOTES-2.5.3.md).
 
 ## License
 
