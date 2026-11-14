@@ -43,6 +43,7 @@ import app.cadence.core.MatchRanker;
 import app.cadence.core.MusicCatalog;
 import app.cadence.core.PlaylistCsv;
 import app.cadence.core.Podcasts;
+import app.cadence.core.QueueShuffle;
 import app.cadence.core.Track;
 import app.cadence.core.YouTube;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -130,6 +131,8 @@ public final class MainActivity extends Activity {
   private String page = "Home", searchText = "", lastError = "No error recorded.";
   private boolean destroyed = false, resumed = false;
   private int searchGeneration = 0;
+  private int queueLoadGeneration = 0;
+  private boolean queueShuffleRequested;
   private TextView playerTitle, playerArtist, playerTime, playerRemaining, playerContext, playerState;
   private LinearLayout playerRelated, playerRecovery;
   private String playerRelatedKey = "";
@@ -1593,11 +1596,54 @@ public final class MainActivity extends Activity {
 
   private void playPlaylist(List<Track> tracks, boolean shuffle) {
     List<Track> playable = new ArrayList<>();
-    for (Track t : tracks) if (!t.sourceUrl.isEmpty()) playable.add(t);
+    int unavailable=0;
+    for (Track t : tracks) if (queuePlayable(t)) playable.add(t); else unavailable++;
     if (playable.isEmpty()) { toast("Match a song first by tapping it."); return; }
-    Track first = shuffle ? playable.get(new java.util.Random().nextInt(playable.size())) : playable.get(0);
-    play(first, tracks);
-    if (controller != null) controller.setShuffleModeEnabled(shuffle);
+    int[] order=shuffle?QueueShuffle.fisherYates(playable.size(),System.nanoTime()):QueueShuffle.natural(playable.size());
+    loadPlaylistInChunks(playable,order,shuffle,unavailable);
+  }
+
+  private boolean queuePlayable(Track track) {
+    if(track==null||track.sourceUrl.isBlank())return false;
+    try {
+      Uri uri=Uri.parse(track.sourceUrl);String scheme=uri.getScheme();
+      if("content".equals(scheme))return true;
+      if(track.podcast)return "https".equals(scheme)||"file".equals(scheme);
+      return track.sourceUrl.startsWith("https://www.youtube.com/watch?v=");
+    } catch(Exception ignored){return false;}
+  }
+
+  private void loadPlaylistInChunks(List<Track> tracks,int[] order,boolean shuffle,int unavailable) {
+    if(controller==null||!resumed)return;
+    int generation=++queueLoadGeneration,starter=order[0];queueShuffleRequested=shuffle;
+    controller.setShuffleModeEnabled(false);controller.setRepeatMode(Player.REPEAT_MODE_OFF);
+    controller.setMediaItem(mediaItem(tracks.get(starter)));controller.prepare();controller.play();
+    status.setText("Loading all "+tracks.size()+" songs…");status.setVisibility(View.VISIBLE);
+    if(!inlineEpisodePlayback)openPlayer();
+    if(shuffle)applyLoadedShuffle(order,0,starter+1,starter);
+    List<QueueShuffle.Chunk> chunks=QueueShuffle.chunks(tracks.size(),starter,64);
+    final int[] at={0},prefix={0},suffix={starter+1};
+    Runnable append=new Runnable(){@Override public void run(){
+      if(generation!=queueLoadGeneration||controller==null||destroyed)return;
+      if(at[0]>=chunks.size()) {
+        status.setVisibility(View.GONE);
+        if(unavailable>0)toast(tracks.size()+" songs queued · "+unavailable+" unavailable item"+(unavailable==1?"":"s")+" skipped");
+        else toast((shuffle?"Shuffled ":"Queued ")+tracks.size()+" songs");
+        return;
+      }
+      QueueShuffle.Chunk chunk=chunks.get(at[0]++);List<MediaItem> items=new ArrayList<>();
+      for(int i=chunk.fromInclusive();i<chunk.toExclusive();i++)items.add(mediaItem(tracks.get(i)));
+      controller.addMediaItems(chunk.insertAt(),items);
+      if(chunk.toExclusive()<=starter)prefix[0]=chunk.toExclusive();else suffix[0]=chunk.toExclusive();
+      if(shuffle)applyLoadedShuffle(order,prefix[0],suffix[0],starter);
+      ui.postDelayed(this,8);
+    }};ui.post(append);
+  }
+
+  private void applyLoadedShuffle(int[] full,int prefix,int suffix,int starter) {
+    if(controller==null||!queueShuffleRequested)return;Bundle args=new Bundle();
+    args.putIntArray("order",QueueShuffle.loadedOrder(full,prefix,suffix,starter));args.putBoolean("shuffle",true);
+    controller.sendCustomCommand(new androidx.media3.session.SessionCommand(PlaybackService.ARRANGE,Bundle.EMPTY),args);
   }
 
   private void play(Track track, List<Track> source) {
@@ -1605,6 +1651,7 @@ public final class MainActivity extends Activity {
       toast("Return to Cadence, then tap the song to play.");
       return;
     }
+    queueLoadGeneration++;
     List<MediaItem> queue = new ArrayList<>();
     int start = 0;
     for (Track t : source)
@@ -1801,7 +1848,7 @@ public final class MainActivity extends Activity {
     playerBack = skipButton(false);
     playerForward = skipButton(true);
     playerShuffle = tintedIcon("shuffle", "Shuffle",playerInk, () -> {
-      if (controller != null) { controller.setShuffleModeEnabled(!controller.getShuffleModeEnabled()); updatePlayer(); }
+      if (controller != null) { queueShuffleRequested=!controller.getShuffleModeEnabled();controller.setShuffleModeEnabled(queueShuffleRequested); updatePlayer(); }
     });
     controls.addView(playerShuffle,new LinearLayout.LayoutParams(0,dp(56),1));
     controls.addView(playerBack, new LinearLayout.LayoutParams(0, dp(56), 1));

@@ -290,6 +290,16 @@ public final class PlaybackService extends MediaLibraryService {
                         } else player.moveMediaItem(from, to);
                         saveQueue();
                       } else if (command.customAction.equals(ARRANGE)) {
+                        int[] requested=args.getIntArray("order");
+                        if(requested!=null) {
+                          if(!app.cadence.core.QueueShuffle.valid(requested,player.getMediaItemCount()))
+                            throw new IllegalArgumentException("Invalid queue order");
+                          arranging=true;
+                          try {
+                            player.setShuffleOrder(new androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder(requested,System.nanoTime()));
+                            player.setShuffleModeEnabled(args.getBoolean("shuffle",true));
+                          } finally {arranging=false;}
+                        }
                         prioritizeManual();
                         saveQueue();
                       } else if (command.customAction.equals(SLEEP_TIMER)) {
@@ -508,6 +518,11 @@ public final class PlaybackService extends MediaLibraryService {
                       .setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build())
                       .build());
             }
+            if(reason==Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
+                &&player.getShuffleModeEnabled()&&player.getRepeatMode()==Player.REPEAT_MODE_ALL) {
+              java.util.ArrayList<Integer> cycle=playbackOrder();
+              if(!cycle.isEmpty()&&cycle.get(0)==player.getCurrentMediaItemIndex())reshuffleAfterCurrent();
+            }
             prioritizeManual();
             TrackInfo t = trackInfo(item);
             player.setPlaybackSpeed(
@@ -677,6 +692,15 @@ public final class PlaybackService extends MediaLibraryService {
     } finally {
       arranging = false;
     }
+  }
+
+  private void reshuffleAfterCurrent() {
+    int count=player.getMediaItemCount(),current=player.getCurrentMediaItemIndex();if(count<3||current<0)return;
+    int[] random=app.cadence.core.QueueShuffle.fisherYates(count-1,System.nanoTime()),order=new int[count];order[0]=current;
+    for(int i=0;i<random.length;i++){int value=random[i];order[i+1]=value>=current?value+1:value;}
+    arranging=true;
+    try {player.setShuffleOrder(new androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder(order,System.nanoTime()));}
+    finally {arranging=false;}
   }
 
   private boolean allowed(MediaItem item) {

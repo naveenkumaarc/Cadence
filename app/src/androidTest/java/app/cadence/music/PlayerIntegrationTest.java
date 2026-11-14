@@ -446,10 +446,10 @@ public class PlayerIntegrationTest {
 
   @Test
   public void headsetPlayRestartsDestroyedServiceAtSavedPodcastPosition() throws Exception {
-    List<MediaItem> queue = List.of(item("Cold A"), item("Cold B"));
+    List<MediaItem> queue = List.of(item("Cold A"), item("Cold B"),item("Cold C"));
     main(() -> {
       controller.setMediaItems(queue, 1, 10000); controller.setRepeatMode(Player.REPEAT_MODE_ALL);
-      controller.prepare(); controller.play(); controller.setPlaybackSpeed(1.5f);
+      controller.setShuffleModeEnabled(true);controller.prepare(); controller.play(); controller.setPlaybackSpeed(1.5f);
     });
     until(() -> controller.isPlaying() && controller.getCurrentPosition() > 10500);
     main(() -> controller.pause());
@@ -465,11 +465,12 @@ public class PlayerIntegrationTest {
     connectController();
     until(() -> controller.isPlaying());
     main(() -> {
-      assertEquals(2, controller.getMediaItemCount());
+      assertEquals(3, controller.getMediaItemCount());
       assertEquals(1, controller.getCurrentMediaItemIndex());
       assertEquals("Cold B", String.valueOf(controller.getMediaMetadata().title));
       assertTrue(controller.getCurrentPosition() >= 10500);
       assertEquals(Player.REPEAT_MODE_ALL, controller.getRepeatMode());
+      assertTrue(controller.getShuffleModeEnabled());
       assertEquals(1.5f, controller.getPlaybackParameters().speed, .01f);
     });
   }
