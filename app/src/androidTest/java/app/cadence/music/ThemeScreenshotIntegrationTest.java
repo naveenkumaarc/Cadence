@@ -31,7 +31,8 @@ public final class ThemeScreenshotIntegrationTest {
   private void main(Checked task){instrumentation.runOnMainSync(()->{try{task.run();}catch(Exception e){throw new RuntimeException(e);}});}
   private Object field(String name)throws Exception{Field f=MainActivity.class.getDeclaredField(name);f.setAccessible(true);return f.get(activity);}
   private void call(String name)throws Exception{Method m=MainActivity.class.getDeclaredMethod(name);m.setAccessible(true);m.invoke(activity);}
-  private void launch(String theme){UiStyle.preferences(context).edit().putString("theme",theme).commit();activity=(MainActivity)instrumentation.startActivitySync(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}
+  private void call(String name,Class<?> type,Object value)throws Exception{Method m=MainActivity.class.getDeclaredMethod(name,type);m.setAccessible(true);m.invoke(activity,value);}
+  private void launch(String theme){AppearanceStore.setBlocking(context,theme);activity=(MainActivity)instrumentation.startActivitySync(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}
   private void capture(String theme,String screen)throws Exception{
     instrumentation.waitForIdleSync();String name="cadence25-"+theme.toLowerCase(java.util.Locale.ROOT)+"-"+screen;
     try(var descriptor=instrumentation.getUiAutomation().executeShellCommand("screencap -p /data/local/tmp/"+name+".png");var input=new FileInputStream(descriptor.getFileDescriptor())){byte[] buffer=new byte[8192];while(input.read(buffer)!=-1){}}
@@ -63,7 +64,7 @@ public final class ThemeScreenshotIntegrationTest {
         preparePlayer();main(()->assertIconLabels(((Dialog)field("playerDialog")).getWindow().getDecorView()));capture(theme,"player");
         main(()->{Dialog dialog=(Dialog)field("playerDialog");if(dialog!=null)dialog.dismiss();activity.finish();});instrumentation.waitForIdleSync();activity=null;
       }
-    }finally{if(activity!=null)main(activity::finish);UiStyle.preferences(context).edit().putString("theme",original).commit();}
+    }finally{if(activity!=null)main(activity::finish);AppearanceStore.setBlocking(context,original);}
   }
 
   @Test public void contrastScaleAndReducedMotionRemainAccessible(){
@@ -78,5 +79,21 @@ public final class ThemeScreenshotIntegrationTest {
     boolean original=UiStyle.preferences(context).getBoolean("motion",true);
     UiStyle.preferences(context).edit().putBoolean("motion",false).commit();
     assertFalse(UiStyle.motion(context));UiStyle.preferences(context).edit().putBoolean("motion",original).commit();
+  }
+
+  @Test public void appearanceAppliesInPlaceAndPersistsInDataStore()throws Exception{
+    String original=UiStyle.theme(context);try{
+      launch("Dark");MediaController connected=awaitController();MainActivity same=activity;
+      main(()->{try{call("settings");call("applyAppearance",String.class,"Light");}catch(Exception e){throw new RuntimeException(e);}});
+      for(int i=0;i<100&&!UiStyle.theme(context).equals("Light");i++)Thread.sleep(25);instrumentation.waitForIdleSync();
+      assertEquals("Light",UiStyle.theme(context));assertSame(same,activity);assertSame(connected,field("controller"));
+      assertTrue(((UiStyle.Palette)field("palette")).light());assertNotNull(findText(activity.getWindow().getDecorView(),"Appearance"));
+    }finally{if(activity!=null)main(activity::finish);AppearanceStore.setBlocking(context,original);}
+  }
+
+  private android.widget.TextView findText(View view,String value){
+    if(view instanceof android.widget.TextView text&&value.contentEquals(text.getText()))return text;
+    if(view instanceof ViewGroup group)for(int i=0;i<group.getChildCount();i++){var found=findText(group.getChildAt(i),value);if(found!=null)return found;}
+    return null;
   }
 }

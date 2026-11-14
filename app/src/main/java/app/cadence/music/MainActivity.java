@@ -180,9 +180,8 @@ public final class MainActivity extends Activity {
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
-    palette=UiStyle.palette(this);
+    AppearanceStore.init(this);applyPaletteValues();
     setTheme(palette.light()?R.style.AppLightTheme:R.style.AppTheme);
-    BG=palette.background();CARD=palette.surface();INK=palette.ink();MUTED=palette.muted();accent=palette.accent();
     super.onCreate(savedInstanceState);
     Artwork.configure(this);
     googleLogin = new GoogleLogin(this, message -> new CadenceDialogBuilder(this).setTitle("Google connection").setMessage(message).setPositiveButton("OK",null).show(), () -> { refreshProfilePhoto(); showProfile();if(CloudSync.prefs(this).getBoolean("chooseBackup",false))cloudRecovery(); });
@@ -435,6 +434,10 @@ public final class MainActivity extends Activity {
     int light=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
     getWindow().getDecorView().setSystemUiVisibility(palette.light()?flags|light:flags&~light);
     root.requestApplyInsets();
+  }
+
+  private void applyPaletteValues() {
+    palette=UiStyle.palette(this);BG=palette.background();CARD=palette.surface();INK=palette.ink();MUTED=palette.muted();accent=palette.accent();
   }
 
   private AppIcon icon(String name, String label, Runnable action) {
@@ -1730,11 +1733,11 @@ public final class MainActivity extends Activity {
       else if (!playerSeeking) playerSeek.setProgress(0);
       playerSeek.setEnabled(total > 0 && controller.isCurrentMediaItemSeekable());
       if (playerShuffle != null)
-        playerShuffle.colour(controller.getShuffleModeEnabled() ? accent : Color.WHITE);
+        playerShuffle.colour(controller.getShuffleModeEnabled() ? accent : INK);
       if (playerRepeat != null) {
         playerRepeat.symbol(controller.getRepeatMode() == Player.REPEAT_MODE_ONE ? "repeatOne" : "repeat");
         playerRepeat.colour(
-            controller.getRepeatMode() == Player.REPEAT_MODE_OFF ? Color.WHITE : accent);
+            controller.getRepeatMode() == Player.REPEAT_MODE_OFF ? INK : accent);
       }
       updateTimeLabels(position, total);
       playerContext.setText(podcast ? "PLAYING FROM PODCAST" : "NOW PLAYING");
@@ -1756,7 +1759,7 @@ public final class MainActivity extends Activity {
     if(playerDialog!=null && playerDialog.isShowing()) {updatePlayer();return;}
     Dialog dialog = new Dialog(this,palette.light()?R.style.AppLightTheme:R.style.AppTheme);
     playerDialog=dialog;playerSeeking=false;
-    int playerInk=Color.WHITE,playerMuted=0xffd1d1d6;
+    int playerInk=INK,playerMuted=MUTED;
     LinearLayout surface = column();
     surface.setBackground(playerBackground(palette.surface()));
     surface.setPadding(dp(20), dp(12), dp(20), dp(24));
@@ -1938,9 +1941,10 @@ public final class MainActivity extends Activity {
     dialog.show();
     if (dialog.getWindow() != null) {
       dialog.getWindow().setLayout(-1, -1);
-      dialog.getWindow().setStatusBarColor(Color.BLACK); dialog.getWindow().setNavigationBarColor(Color.BLACK);
+      dialog.getWindow().setStatusBarColor(BG); dialog.getWindow().setNavigationBarColor(BG);
       int flags=dialog.getWindow().getDecorView().getSystemUiVisibility();
-      dialog.getWindow().getDecorView().setSystemUiVisibility(flags&~(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR));
+      int lightBars=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+      dialog.getWindow().getDecorView().setSystemUiVisibility(palette.light()?flags|lightBars:flags&~lightBars);
       dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
     }
     surface.requestApplyInsets();
@@ -2032,7 +2036,7 @@ public final class MainActivity extends Activity {
   }
 
   private TransportButton skipButton(boolean forward) {
-    TransportButton button = new TransportButton(this, forward ? TransportButton.Icon.FORWARD : TransportButton.Icon.BACK, Color.WHITE, Color.TRANSPARENT, forward ? "Skip forward" : "Skip back");
+    TransportButton button = new TransportButton(this, forward ? TransportButton.Icon.FORWARD : TransportButton.Icon.BACK, INK, Color.TRANSPARENT, forward ? "Skip forward" : "Skip back");
     button.setOnClickListener(v -> {
       Track t = currentTrack();if(t==null||!t.podcast)return;int seconds=Preferences.skip(this,forward);
       if (controller != null) {
@@ -2911,7 +2915,8 @@ public final class MainActivity extends Activity {
   private void settings() {
     clear("Settings", "");
     body.addView(text("Settings", UiStyle.DISPLAY, INK, true)); gap(6);
-    body.addView(text("Make Cadence feel like you.", 15, MUTED, false)); gap(24);
+    body.addView(text("Make Cadence feel like you.", 15, MUTED, false)); gap(20);
+    appearanceControl();gap(24);
     LinearLayout account = settingsGroup("Profile & sync");
     settingRow(account,"info",profileName(),CloudSync.subject(this).isEmpty()?"Optional Google sign-in · Save your library online":CloudSync.prefs(this).getString("email",""),this::showProfile);
     LinearLayout discovery = settingsGroup("Discovery");
@@ -2946,8 +2951,6 @@ public final class MainActivity extends Activity {
     settingDivider(saved);
     settingRow(saved, "import", "Import from file", "Playlists, audio files or podcast feeds", this::showImport);
     LinearLayout personal = settingsGroup("Personalise");
-    settingRow(personal,"palette","Theme",UiStyle.theme(this),this::chooseTheme);
-    settingDivider(personal);
     settingRow(personal,"palette","Colour scheme",UiStyle.preferences(this).contains("colour")?"Custom colour":"Indigo blue",this::chooseColour);
     settingDivider(personal);
     appearanceSwitch(personal,"Motion","Subtle screen transitions and loading animation","motion");
@@ -2963,6 +2966,17 @@ public final class MainActivity extends Activity {
     settingRow(about, "info", "Playback diagnostics", "Connection, queue & playback details", this::diagnostics);
     gap(4);
     TextView version = text("Cadence " + BuildConfig.VERSION_NAME, 13, MUTED, false); version.setGravity(Gravity.CENTER); body.addView(version);
+  }
+
+  private void appearanceControl() {
+    TextView heading=sectionTitle("Appearance");heading.setPadding(dp(4),0,0,dp(10));body.addView(heading);
+    LinearLayout selector=row();selector.setPadding(dp(4),dp(4),dp(4),dp(4));selector.setBackground(round(CARD,UiStyle.RADIUS_CARD));
+    String current=UiStyle.theme(this);
+    for(String choice:new String[]{"System","Light","Dark"}) {
+      Button option=chip(choice,current.equals(choice),()->applyAppearance(choice));option.setContentDescription(choice+" appearance"+(current.equals(choice)?", selected":""));
+      LinearLayout.LayoutParams size=new LinearLayout.LayoutParams(0,dp(48),1);size.setMargins(dp(2),0,dp(2),0);selector.addView(option,size);
+    }
+    body.addView(selector,new LinearLayout.LayoutParams(-1,-2));
   }
 
   private LinearLayout settingsGroup(String title) {
@@ -3249,6 +3263,7 @@ public final class MainActivity extends Activity {
     labels.addView(text(CloudSync.prefs(this).getString("email","Saved on this phone"),13,MUTED,false));
     identity.addView(labels,new LinearLayout.LayoutParams(0,-2,1)); body.addView(identity); gap(8);
     LinearLayout deviceGroup=settingsGroup("This device");
+    settingRow(deviceGroup,"palette","Appearance",UiStyle.theme(this),this::chooseTheme);settingDivider(deviceGroup);
     settingRow(deviceGroup,"device","Device name",BackupLabels.deviceName(this),()->ask("Device name","Example: Naveen’s phone",BackupLabels.deviceName(this),name->{
       String value=name.trim();if(value.isEmpty() || value.length()>80) {toast("Use a device name between 1 and 80 characters.");return;}
       CloudSync.prefs(this).edit().putString("deviceName",value).apply();CloudSync.changed(this);showProfile();
@@ -3467,8 +3482,18 @@ public final class MainActivity extends Activity {
   }
 
   private void chooseTheme() {
-    String[] choices={"Dark","Light","Follow device"};int selected=java.util.Arrays.asList(choices).indexOf(UiStyle.theme(this));
-    new CadenceDialogBuilder(this).setTitle("Choose theme").setSingleChoiceItems(choices,selected,(d,n)->{UiStyle.preferences(this).edit().putString("theme",choices[n]).apply();d.dismiss();recreate();}).setNegativeButton("Cancel",null).show();
+    String[] choices={"System","Light","Dark"};int selected=java.util.Arrays.asList(choices).indexOf(UiStyle.theme(this));
+    new CadenceDialogBuilder(this).setTitle("Appearance").setSingleChoiceItems(choices,selected,(d,n)->{d.dismiss();applyAppearance(choices[n]);}).setNegativeButton("Cancel",null).show();
+  }
+
+  private void applyAppearance(String choice) {
+    Bundle saved=captureScreen();boolean playerOpen=playerDialog!=null&&playerDialog.isShowing();
+    AppearanceStore.set(this,choice,()-> {
+      if(destroyed)return;if(playerDialog!=null)playerDialog.dismiss();if(queueDialog!=null)queueDialog.dismiss();
+      applyPaletteValues();setTheme(palette.light()?R.style.AppLightTheme:R.style.AppTheme);buildShell();
+      restoringScreen=true;try{restoreScreen(saved);}finally{restoringScreen=false;}
+      if(playerOpen)openPlayer();updatePlayer();CadenceWidget.updateAll(this);
+    });
   }
 
   private void appearanceSwitch(LinearLayout card,String title,String detail,String key) {
@@ -3506,7 +3531,7 @@ public final class MainActivity extends Activity {
   }
 
   @Override protected void onSaveInstanceState(Bundle out){super.onSaveInstanceState(out);out.putAll(captureScreen());out.putParcelableArrayList("screenHistory",new ArrayList<>(screenHistory));}
-  @Override public void onConfigurationChanged(android.content.res.Configuration config){super.onConfigurationChanged(config);Bundle saved=new Bundle();onSaveInstanceState(saved);boolean playerOpen=playerDialog!=null;if(playerDialog!=null)playerDialog.dismiss();if(queueDialog!=null)queueDialog.dismiss();buildShell();restoringScreen=true;try{restoreScreen(saved);}finally{restoringScreen=false;}if(playerOpen)openPlayer();updatePlayer();}
+  @Override public void onConfigurationChanged(android.content.res.Configuration config){super.onConfigurationChanged(config);Bundle saved=new Bundle();onSaveInstanceState(saved);boolean playerOpen=playerDialog!=null;if(playerDialog!=null)playerDialog.dismiss();if(queueDialog!=null)queueDialog.dismiss();applyPaletteValues();setTheme(palette.light()?R.style.AppLightTheme:R.style.AppTheme);buildShell();restoringScreen=true;try{restoreScreen(saved);}finally{restoringScreen=false;}if(playerOpen)openPlayer();updatePlayer();CadenceWidget.updateAll(this);}
 
   private void ask(String title, String hint, String value, Consumer<String> answer) {
     ask(title, hint, value, answer, null);
@@ -3603,10 +3628,15 @@ public final class MainActivity extends Activity {
   }
 
   private GradientDrawable playerBackground(int artworkColour) {
-    int top=androidx.core.graphics.ColorUtils.blendARGB(Color.BLACK,artworkColour,.62f);
-    int middle=androidx.core.graphics.ColorUtils.blendARGB(Color.BLACK,artworkColour,.28f);
+    if(palette.light()) {
+      int top=androidx.core.graphics.ColorUtils.blendARGB(BG,artworkColour,.14f);
+      int middle=androidx.core.graphics.ColorUtils.blendARGB(palette.surface(),artworkColour,.06f);
+      return new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{top,middle,BG});
+    }
+    int top=androidx.core.graphics.ColorUtils.blendARGB(BG,artworkColour,.62f);
+    int middle=androidx.core.graphics.ColorUtils.blendARGB(BG,artworkColour,.28f);
     return new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-        new int[]{top,middle,Color.BLACK});
+        new int[]{top,middle,BG});
   }
 
   private String greeting() {

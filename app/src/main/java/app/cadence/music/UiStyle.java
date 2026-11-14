@@ -44,14 +44,14 @@ final class UiStyle {
   }
 
   static String theme(Context context) {
-    return preferences(context).getString("theme", "Dark");
+    return AppearanceStore.mode(context);
   }
 
   static Palette palette(Context context) {
     String choice = theme(context);
     boolean systemLight = (context.getResources().getConfiguration().uiMode
         & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_NO;
-    boolean light = choice.equals("Light") || choice.equals("Follow device") && systemLight;
+    boolean light = choice.equals("Light") || choice.equals("System") && systemLight;
     if (!preferences(context).contains("colour")) return light ? LIGHT : DARK;
     return scheme(preferences(context).getInt("colour", LIGHT.accent()), light);
   }

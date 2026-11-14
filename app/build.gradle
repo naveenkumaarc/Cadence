@@ -56,6 +56,7 @@ dependencies {
     implementation 'androidx.media3:media3-session:1.8.0'
     implementation 'androidx.media3:media3-datasource-okhttp:1.8.0'
     implementation 'androidx.concurrent:concurrent-futures:1.2.0'
+    implementation 'androidx.datastore:datastore-preferences-rxjava3:1.1.7'
     androidTestImplementation 'androidx.test:runner:1.6.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
     androidTestImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
