@@ -94,6 +94,24 @@ final class AppIcon extends View {
         canvas.drawCircle(24, 19, 6, p);
         canvas.drawArc(14, 27, 34, 39, 190, 160, false, p);
       }
+      case "heart" -> {
+        path.moveTo(24, 35); path.cubicTo(20,31,13,27,13,20);
+        path.cubicTo(13,14,21,12,24,18); path.cubicTo(27,12,35,14,35,20);
+        path.cubicTo(35,27,28,31,24,35); canvas.drawPath(path,p);
+      }
+      case "play" -> {
+        path.moveTo(19,15); path.lineTo(34,24); path.lineTo(19,33); path.close();
+        canvas.drawPath(path,p);
+      }
+      case "device" -> {
+        canvas.drawRoundRect(17,11,31,37,3,3,p);
+        canvas.drawLine(22,33,26,33,p);
+      }
+      case "cloud" -> {
+        path.moveTo(16,32); path.cubicTo(9,32,9,22,16,21);
+        path.cubicTo(17,13,29,11,32,19); path.cubicTo(40,19,40,32,32,32);
+        path.close(); canvas.drawPath(path,p);
+      }
       case "timer" -> {
         canvas.drawCircle(24, 25, 11, p);
         canvas.drawLine(24, 25, 24, 18, p); canvas.drawLine(24, 25, 30, 28, p);

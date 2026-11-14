@@ -139,7 +139,7 @@ final class UiStyle {
   }
 
   static Typeface typeface(boolean emphasized) {
-    return Typeface.create("sans-serif", emphasized ? Typeface.BOLD : Typeface.NORMAL);
+    return Typeface.create(emphasized ? "sans-serif-medium" : "sans-serif", Typeface.NORMAL);
   }
 
   static GradientDrawable shape(Context context, int colour, int radius) {
