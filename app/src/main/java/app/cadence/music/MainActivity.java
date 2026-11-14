@@ -2667,12 +2667,23 @@ public final class MainActivity extends Activity {
     queueBody.addView(now);
     int current = controller.getCurrentMediaItemIndex();
     if (current >= 0) queueBody.addView(queueRow(current, true));
-    TextView next = sectionTitle("Next up");
-    next.setPadding(0, dp(24), 0, dp(14));
-    queueBody.addView(next);
-    if (upcoming.isEmpty())
+    List<Integer> chosen=new ArrayList<>(),autoplay=new ArrayList<>();
+    for(int index:upcoming)(isAutoplay(controller.getMediaItemAt(index))?autoplay:chosen).add(index);
+    TextView next = sectionTitle("Your queue");
+    next.setPadding(0, dp(24), 0, dp(14));queueBody.addView(next);
+    if (chosen.isEmpty()&&autoplay.isEmpty())
       queueBody.addView(text("All caught up. Add more songs to your queue.", 14, MUTED, false));
-    for (int index : upcoming) queueBody.addView(queueRow(index, false));
+    else if(chosen.isEmpty())queueBody.addView(text("Songs you add will play before autoplay.",UiStyle.FOOTNOTE,MUTED,false));
+    for (int index : chosen) queueBody.addView(queueRow(index, false));
+    if(!autoplay.isEmpty()) {
+      TextView heading=sectionTitle("Autoplay · Similar songs");heading.setPadding(0,dp(24),0,dp(14));queueBody.addView(heading);
+      for(int index:autoplay)queueBody.addView(queueRow(index,false));
+    }
+  }
+
+  private boolean isAutoplay(MediaItem item) {
+    try {Bundle extras=item.mediaMetadata.extras;return extras!=null&&new org.json.JSONObject(extras.getString("track","{}")).optBoolean("radio");}
+    catch(Exception ignored){return false;}
   }
 
   private View queueRow(int index, boolean current) {
@@ -2876,7 +2887,7 @@ public final class MainActivity extends Activity {
     settingDivider(playback);
     settingRow(playback,"equalizer","Equalizer","Android audio effects for the active session",this::openEqualizer);
     settingDivider(playback);
-    LinearLayout auto = settingRow(playback, "shuffle", "Autoplay", "Keep listening with related songs", null);
+    LinearLayout auto = settingRow(playback, "shuffle", "Autoplay similar songs", "Keep ten mood-matched songs ready", null);
     android.widget.Switch autoplay = new android.widget.Switch(this);
     autoplay.setContentDescription("Autoplay related songs");
     autoplay.setThumbTintList(new ColorStateList(new int[][] {new int[] {android.R.attr.state_checked}, new int[] {}}, new int[] {accent, MUTED}));

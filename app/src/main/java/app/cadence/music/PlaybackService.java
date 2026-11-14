@@ -40,6 +40,12 @@ public final class PlaybackService extends MediaLibraryService {
   private String radioRequested = "";
   private String radioContextSeed = "";
   private long radioRetryAt;
+  private app.cadence.core.Track sessionFirstTrack;
+  private final java.util.ArrayDeque<app.cadence.core.MoodAutoplay.Feedback> sessionFeedback = new java.util.ArrayDeque<>();
+  private final java.util.ArrayDeque<String> recentSongs = new java.util.ArrayDeque<>();
+  private final java.util.Map<String,Integer> completedSongs = new java.util.HashMap<>(), skippedSongs = new java.util.HashMap<>();
+  private final java.util.Map<String,app.cadence.core.Track> heardSongs = new java.util.LinkedHashMap<>();
+  private final java.util.Map<String,RadioCache> moodCache = new java.util.HashMap<>();
   private AutoLibrary autoLibrary;
   private final java.util.concurrent.atomic.AtomicBoolean carDiscoveryLoading=new java.util.concurrent.atomic.AtomicBoolean();
   private long carDiscoveryRetryAt;
@@ -481,6 +487,13 @@ public final class PlaybackService extends MediaLibraryService {
           @Override
           public void onMediaItemTransition(MediaItem item, int reason) {
             if (owner != player) return;
+            app.cadence.core.Track selected=track(item);
+            if(selected!=null&&!selected.podcast) {
+              if(reason==Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) {
+                sessionFirstTrack=selected;sessionFeedback.clear();radioRequested="";radioRetryAt=0;
+              } else if(sessionFirstTrack==null) sessionFirstTrack=selected;
+              heardSongs.put(selected.sourceUrl,selected);
+            }
             if(reason==Player.MEDIA_ITEM_TRANSITION_REASON_AUTO&&sleepEndOfTrack){
               sleepEndOfTrack=false;sleepAt=0;player.pause();player.seekTo(0);
             }
@@ -515,6 +528,12 @@ public final class PlaybackService extends MediaLibraryService {
               boolean complete = reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION;
               podcasts.progress(old.id, complete ? 0 : oldPos.positionMs, complete);
             }
+            if(!old.podcast && oldPos.mediaItem!=null
+                && (reason==Player.DISCONTINUITY_REASON_AUTO_TRANSITION
+                    || reason==Player.DISCONTINUITY_REASON_SEEK
+                    || reason==Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT))
+              rememberSongSignal(oldPos.mediaItem,oldPos.positionMs,
+                  reason==Player.DISCONTINUITY_REASON_AUTO_TRANSITION);
             saveQueue();
           }
 
@@ -703,6 +722,56 @@ public final class PlaybackService extends MediaLibraryService {
     return t;
   }
 
+  private static app.cadence.core.Track track(MediaItem item) {
+    try {
+      android.os.Bundle extras=item==null?null:item.mediaMetadata.extras;
+      if(extras==null)return null;
+      return Library.decode(new org.json.JSONObject(extras.getString("track","{}")));
+    } catch(Exception ignored) { return null; }
+  }
+
+  private void rememberSongSignal(MediaItem item,long position,boolean automatic) {
+    app.cadence.core.Track song=track(item);if(song==null||song.podcast||song.sourceUrl.isBlank())return;
+    long duration=song.durationSeconds>0?song.durationSeconds*1000L:0;
+    boolean complete=automatic||duration>0&&position>=duration*.85;
+    boolean quick=!complete&&(position<30_000||duration>0&&position<duration*.2);
+    if(complete)completedSongs.merge(song.sourceUrl,1,Integer::sum);
+    if(quick)skippedSongs.merge(song.sourceUrl,1,Integer::sum);
+    recentSongs.remove(song.sourceUrl);recentSongs.addFirst(song.sourceUrl);
+    while(recentSongs.size()>50)recentSongs.removeLast();
+    heardSongs.put(song.sourceUrl,song);
+    sessionFeedback.addLast(new app.cadence.core.MoodAutoplay.Feedback(
+        moodSignals(song,false,false),false,complete,quick));
+    while(sessionFeedback.size()>3)sessionFeedback.removeFirst();
+    radioRequested="";
+  }
+
+  private app.cadence.core.MoodAutoplay.Signals moodSignals(
+      app.cadence.core.Track song,boolean liked,boolean downloaded) {
+    java.util.Set<String> artists=new java.util.LinkedHashSet<>();
+    for(String artist:song.artist.split("(?i)\\s*(?:,|&| feat\\.? | featuring | x )\\s*"))
+      if(!artist.isBlank())artists.add(artist);
+    String fallback=Preferences.get(this).getString("homeLanguage","All");
+    if(fallback.equals("All"))fallback="";
+    String language=app.cadence.core.MoodAutoplay.language(song.title+" "+song.artist,fallback);
+    int year=app.cadence.core.MoodAutoplay.year(song.title+" "+song.query);
+    java.util.Set<String> tags=new java.util.LinkedHashSet<>();String words=(song.title+" "+song.query).toLowerCase(java.util.Locale.ROOT);
+    for(String tag:java.util.List.of("melody","acoustic","dance","rock","lofi","devotional","live","romantic","instrumental"))
+      if(words.contains(tag))tags.add(tag);
+    int rank=-1,index=0;for(String recent:recentSongs){if(recent.equals(song.sourceUrl)){rank=index;break;}index++;}
+    return new app.cadence.core.MoodAutoplay.Signals(song.sourceUrl,song.title,artists,artists,"",language,year,tags,
+        song.durationSeconds,liked,downloaded,completedSongs.getOrDefault(song.sourceUrl,0),
+        skippedSongs.getOrDefault(song.sourceUrl,0),rank);
+  }
+
+  private boolean mixesLanguages() {
+    java.util.Set<String> languages=new java.util.HashSet<>();int checked=0;
+    for(String source:recentSongs){app.cadence.core.Track song=heardSongs.get(source);if(song==null)continue;
+      String language=moodSignals(song,false,false).language();if(!language.isBlank())languages.add(language);
+      if(++checked==20)break;}
+    return checked>=6&&languages.size()>1;
+  }
+
   private void saveProgress(boolean completed) {
     if (player == null || podcasts == null) return;
     TrackInfo t = trackInfo(player.getCurrentMediaItem());
@@ -854,57 +923,76 @@ public final class PlaybackService extends MediaLibraryService {
         var extras=item.mediaMetadata.extras;
         if(extras==null || item.localConfiguration==null) continue;
         var track=new org.json.JSONObject(extras.getString("track","{}"));
-        if(track.optBoolean("radio") && !track.optBoolean("podcast")) radioContextSeed=item.localConfiguration.uri.toString();
+        if(!track.optBoolean("podcast")) {
+          if(sessionFirstTrack==null)sessionFirstTrack=Library.decode(track);
+          if(track.optBoolean("radio"))radioContextSeed=item.localConfiguration.uri.toString();
+        }
       } catch(Exception ignored) {}
     }
   }
 
-  private String radioSeed() {
-    if(radioContextSeed.isEmpty()) return "";
-    var timeline=player.getCurrentTimeline();
-    int current=player.getCurrentMediaItemIndex();
-    if(timeline.isEmpty() || current<0 || current>=timeline.getWindowCount()) return "";
-    java.util.ArrayList<app.cadence.core.RadioPlan.Item> remaining=new java.util.ArrayList<>();
-    remaining.add(new app.cadence.core.RadioPlan.Item(radioContextSeed,true,false));
-    int at=current;
-    for(int n=0;n<3 && at!=C.INDEX_UNSET;n++) {
-      MediaItem item=player.getMediaItemAt(at);
-      remaining.add(new app.cadence.core.RadioPlan.Item(item.localConfiguration==null?"":item.localConfiguration.uri.toString(),radio(item),trackInfo(item).podcast));
-      at=timeline.getNextWindowIndex(at,Player.REPEAT_MODE_OFF,player.getShuffleModeEnabled());
+  private int upcomingAutoplay() {
+    if(player.getCurrentTimeline().isEmpty())return 0;
+    int count=0,at=player.getCurrentMediaItemIndex();
+    for(int n=0;n<player.getMediaItemCount();n++) {
+      at=player.getCurrentTimeline().getNextWindowIndex(at,Player.REPEAT_MODE_OFF,player.getShuffleModeEnabled());
+      if(at==C.INDEX_UNSET)break;if(radio(player.getMediaItemAt(at)))count++;
     }
-    // At most three entries are inspected on the periodic playback tick, even in a huge queue.
-    if(at!=C.INDEX_UNSET) return "";
-    return app.cadence.core.RadioPlan.seed(remaining,1);
+    return count;
   }
 
   private void extendRadio() {
     if (player == null || radioLoading || !Preferences.get(this).getBoolean("autoplay",true)
         || player.getMediaItemCount()==0 || player.getRepeatMode()!=Player.REPEAT_MODE_OFF
         || System.currentTimeMillis()<radioRetryAt) return;
-    String seed=radioSeed();
-    if (seed.isEmpty() || seed.equals(radioRequested)) return;
-    radioLoading=true; radioRequested=seed;
+    int runway=upcomingAutoplay();if(runway>=10)return;
+    app.cadence.core.Track seed=sessionFirstTrack!=null?sessionFirstTrack:track(player.getCurrentMediaItem());
+    if(seed==null||seed.podcast||!seed.sourceUrl.startsWith("https://www.youtube.com/watch?v="))return;
+    String request=seed.sourceUrl+"|"+runway+"|"+player.getMediaItemCount()+"|"+sessionFeedback.size();
+    if(request.equals(radioRequested))return;
+    radioLoading=true;radioRequested=request;
     networkTasks.execute(() -> {
       List<app.cadence.core.Track> found=java.util.Collections.emptyList();
-      try { found=app.cadence.core.MusicCatalog.related(seed); } catch(Exception ignored) {}
-      List<app.cadence.core.Track> tracks=found;
+      try {
+        RadioCache cached=moodCache.get(seed.sourceUrl);
+        if(cached!=null&&System.currentTimeMillis()-cached.at()<15*60_000)found=cached.tracks();
+        else {found=app.cadence.core.MusicCatalog.related(seed.sourceUrl);moodCache.put(seed.sourceUrl,new RadioCache(System.currentTimeMillis(),List.copyOf(found)));}
+      } catch(Exception ignored) {}
+      List<app.cadence.core.Track> related=found;
+      List<AutoLibrary.AutoplayTrack> local=java.util.Collections.emptyList();
+      try {local=autoLibrary.autoplayCandidates();}catch(Exception ignored){}
+      List<AutoLibrary.AutoplayTrack> saved=local;
       handler.post(() -> {
         radioLoading=false;
         if (disposed) return;
         if(player==null || player.getMediaItemCount()==0 || !Preferences.get(this).getBoolean("autoplay",true)) return;
-        if(!seed.equals(radioSeed())) { radioRequested=""; return; }
+        if(sessionFirstTrack==null||!seed.sourceUrl.equals(sessionFirstTrack.sourceUrl)) {radioRequested="";return;}
         java.util.HashSet<String> used=new java.util.HashSet<>();
         for(int i=0;i<player.getMediaItemCount();i++) {
           MediaItem m=player.getMediaItemAt(i); if(m.localConfiguration!=null) used.add(m.localConfiguration.uri.toString());
         }
+        java.util.LinkedHashMap<String,app.cadence.core.Track> tracks=new java.util.LinkedHashMap<>();
+        java.util.HashMap<String,AutoLibrary.AutoplayTrack> localFlags=new java.util.HashMap<>();
+        for(app.cadence.core.Track value:related)tracks.putIfAbsent(value.sourceUrl,value);
+        for(AutoLibrary.AutoplayTrack value:saved){tracks.putIfAbsent(value.track().sourceUrl,value.track());localFlags.put(value.track().sourceUrl,value);}
+        for(app.cadence.core.Track value:heardSongs.values())tracks.putIfAbsent(value.sourceUrl,value);
+        java.util.ArrayList<app.cadence.core.MoodAutoplay.Signals> candidates=new java.util.ArrayList<>();
+        for(app.cadence.core.Track value:tracks.values()) {AutoLibrary.AutoplayTrack flags=localFlags.get(value.sourceUrl);
+          candidates.add(moodSignals(value,flags!=null&&flags.liked(),flags!=null&&flags.downloaded()));}
+        app.cadence.core.MoodAutoplay.Profile profile=app.cadence.core.MoodAutoplay.profile(
+            moodSignals(seed,localFlags.containsKey(seed.sourceUrl)&&localFlags.get(seed.sourceUrl).liked(),
+                localFlags.containsKey(seed.sourceUrl)&&localFlags.get(seed.sourceUrl).downloaded()),
+            new java.util.ArrayList<>(sessionFeedback));
+        List<app.cadence.core.MoodAutoplay.Ranked> ranked=app.cadence.core.MoodAutoplay.rank(profile,candidates,used,mixesLanguages());
         java.util.ArrayList<MediaItem> additions=new java.util.ArrayList<>();
-        for(var t:tracks) if(!t.podcast && used.add(t.sourceUrl)) try {
+        int needed=Math.max(0,12-upcomingAutoplay());
+        for(var pick:ranked) {app.cadence.core.Track t=tracks.get(pick.song().source());if(t==null||t.podcast||!used.add(t.sourceUrl))continue;try {
           MediaItem item=AutoLibrary.item(t,t.sourceUrl);
           android.os.Bundle extras=new android.os.Bundle(item.mediaMetadata.extras);
           extras.putString("track",Library.encode(t).put("radio",true).toString());
           additions.add(item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build()).build());
-          if(additions.size()==12) break;
-        } catch(Exception ignored) {}
+          if(additions.size()>=needed)break;
+        }catch(Exception ignored){}}
         if(additions.isEmpty()) { radioRequested=""; radioRetryAt=System.currentTimeMillis()+60_000; return; }
         boolean ended=player.getPlaybackState()==Player.STATE_ENDED && player.getPlayWhenReady();
         java.util.ArrayList<Integer> existingOrder=playbackOrder();
@@ -919,6 +1007,7 @@ public final class PlaybackService extends MediaLibraryService {
         }
         prioritizeManual();
         if(ended) { player.seekTo(incomingOrder.get(0),0); player.prepare(); player.play(); }
+        radioRequested="";
         saveQueue();
       });
     });
@@ -1011,4 +1100,5 @@ public final class PlaybackService extends MediaLibraryService {
       this.url = url;
     }
   }
+  private record RadioCache(long at,List<app.cadence.core.Track> tracks) {}
 }

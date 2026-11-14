@@ -16,6 +16,18 @@ final class AutoLibrary {
   static Bundle styles() {Bundle b=new Bundle();b.putBoolean("android.media.browse.SEARCH_SUPPORTED",true);b.putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT",2);b.putInt("android.media.browse.CONTENT_STYLE_PLAYABLE_HINT",1);return b;}
   static <T> List<T> page(List<T> items,int page,int size) {if(page<0||size<1)throw new IllegalArgumentException("Invalid page");int start=(int)Math.min((long)page*size,items.size()),end=(int)Math.min((long)start+size,items.size());return items.subList(start,end);}
   private Library library() throws Exception {Library l=new Library(context);l.playlists.add(SongDownloads.get(context).playlist());Library.Playlist wishes=DownloadList.playlist(context);if(!wishes.tracks.isEmpty())l.playlists.add(wishes);return l;}
+  record AutoplayTrack(Track track,boolean liked,boolean downloaded) {}
+  List<AutoplayTrack> autoplayCandidates() throws Exception {
+    Library saved=new Library(context);Map<String,AutoplayTrack> out=new LinkedHashMap<>();
+    for(Library.Playlist playlist:saved.playlists)if(playlist.id.equals("favourites"))
+      for(Track track:playlist.tracks)if(!track.podcast&&!track.sourceUrl.isBlank())
+        out.put(SongDownloads.key(track.sourceUrl),new AutoplayTrack(track,true,SongDownloads.get(context).state(track).complete));
+    for(Track track:SongDownloads.get(context).tracks())if(!track.podcast&&!track.sourceUrl.isBlank()) {
+      String key=SongDownloads.key(track.sourceUrl);AutoplayTrack old=out.get(key);
+      out.put(key,new AutoplayTrack(track,old!=null&&old.liked(),true));
+    }
+    return new ArrayList<>(out.values());
+  }
   static MediaItem folder(String id,String title) {return folder(id,title,"","");}
   private static MediaItem folder(String id,String title,String subtitle,String art) {
     var m=new MediaMetadata.Builder().setTitle(title).setSubtitle(subtitle).setIsBrowsable(true).setIsPlayable(false).setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED).setExtras(styles());
