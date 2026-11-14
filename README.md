@@ -4,7 +4,7 @@ Cadence is a native Android music and podcast player for Android 8 and newer. It
 
 ## Screens
 
-Cadence provides matching Light, Dark and Follow device themes across Home, Search, Library, Profile, detail pages, the full player, queue, sheets and settings. The instrumented UI suite captures Home, Player, Library and Settings in both themes; see [UI verification](docs/VERIFICATION-2.5.0.md) for the capture names and device checks.
+Cadence provides matching Light, Dark and System themes across Home, Search, Library, Profile, detail pages, the full player, queue, sheets and settings. The instrumented UI suite captures Home, Player, Library and Settings in both themes; see [UI verification](docs/VERIFICATION-2.5.0.md) for the capture names and device checks.
 
 ## Features
 
@@ -15,9 +15,9 @@ Cadence provides matching Light, Dark and Follow device themes across Home, Sear
 - Android Auto browse and playback controls
 - Home-screen widget with artwork, progress and transport controls
 - Optional Google Drive sync, named backups and compatible local backup/restore
-- Light, Dark and Follow device themes, custom accent colors, motion and touch-feedback controls
+- Light, Dark and System themes, custom accent colors, motion and touch-feedback controls
 
-Cadence 2.5.1 is available as a signed update: [download APK](https://github.com/naveenkumaarc/Cadence/releases/download/v2.5.1/Cadence-2.5.1.apk) · [SHA-256](downloads/SHA256SUMS-2.5.1.txt) · [install notes](downloads/READ-BEFORE-INSTALLING-2.5.1.txt). It uses the retained release certificate and can update earlier release-signed Cadence installations without uninstalling.
+Cadence 2.5.2 is available as a signed update: [download APK](https://github.com/naveenkumaarc/Cadence/releases/download/v2.5.2/Cadence-2.5.2.apk) · [SHA-256](downloads/SHA256SUMS-2.5.2.txt) · [install notes](downloads/READ-BEFORE-INSTALLING-2.5.2.txt). It uses the retained release certificate and can update earlier release-signed Cadence installations without uninstalling.
 
 Version history and verification reports live in [docs](docs/). Future signed binary artifacts should move to GitHub Releases so the source checkout stays small; historical APKs and checksums are retained unchanged.
 
@@ -53,7 +53,7 @@ bash tools/run-native-checks.sh
 - `examples/` — sample import files.
 - `tools/` — repeatable transfer and connected-device verification helpers.
 
-Maintainer notes: [Google configuration](GOOGLE-CONFIG.md) · [privacy](PRIVACY.md) · [project structure](docs/PROJECT-STRUCTURE.md) · [2.5.1 release notes](docs/RELEASE-NOTES-2.5.1.md).
+Maintainer notes: [Google configuration](GOOGLE-CONFIG.md) · [privacy](PRIVACY.md) · [project structure](docs/PROJECT-STRUCTURE.md) · [2.5.2 release notes](docs/RELEASE-NOTES-2.5.2.md).
 
 ## License
 
