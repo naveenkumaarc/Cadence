@@ -3,11 +3,13 @@
     <color name="cadence_surface_light">#F5F5F7</color>
     <color name="cadence_ink_light">#1D1D1F</color>
     <color name="cadence_muted_light">#6E6E73</color>
-    <color name="cadence_accent_light">#2F5BE0</color>
+    <color name="cadence_accent_light">#D12B45</color>
     <color name="cadence_background_dark">#000000</color>
     <color name="cadence_surface_dark">#1C1C1E</color>
     <color name="cadence_ink_dark">#F5F5F7</color>
     <color name="cadence_muted_dark">#AEAEB2</color>
-    <color name="cadence_accent_dark">#3E6CF2</color>
+    <color name="cadence_accent_dark">#DA354B</color>
+    <!-- Fixed launcher/widget brand mark; deliberately independent from the selectable accent. -->
+    <color name="cadence_brand">#2F5BE0</color>
     <color name="cadence_widget_track">#48484A</color>
 </resources>

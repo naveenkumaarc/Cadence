@@ -17,6 +17,7 @@ public class RequestedChangesIntegrationTest {
   private final android.app.Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
   private final Context context=instrumentation.getTargetContext();
   private MainActivity activity;
+  private String accentId;private int customColour;
   private interface Checked{void run()throws Exception;}
   private void main(Checked task){instrumentation.runOnMainSync(()->{try{task.run();}catch(Exception e){throw new RuntimeException(e);}});}
   private Object field(String name)throws Exception{Field f=MainActivity.class.getDeclaredField(name);f.setAccessible(true);return f.get(activity);}
@@ -26,8 +27,8 @@ public class RequestedChangesIntegrationTest {
   private TextView text(View view,String value){if(view instanceof TextView t&&value.contentEquals(t.getText()))return t;if(view instanceof ViewGroup g)for(int i=0;i<g.getChildCount();i++){TextView found=text(g.getChildAt(i),value);if(found!=null)return found;}return null;}
   private View described(View view,String label){if(label.contentEquals(view.getContentDescription()==null?"":view.getContentDescription()))return view;if(view instanceof ViewGroup g)for(int i=0;i<g.getChildCount();i++){View found=described(g.getChildAt(i),label);if(found!=null)return found;}return null;}
   private EditText edit(View view){if(view instanceof EditText e)return e;if(view instanceof ViewGroup g)for(int i=0;i<g.getChildCount();i++){EditText found=edit(g.getChildAt(i));if(found!=null)return found;}return null;}
-  @Before public void launch(){activity=(MainActivity)instrumentation.startActivitySync(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}
-  @After public void cleanup(){if(activity!=null)main(()->activity.finish());Preferences.get(context).edit().putBoolean("downloadsPaused",false).commit();UiStyle.preferences(context).edit().remove("colour").commit();}
+  @Before public void launch(){AccentStore.init(context);accentId=AccentStore.id(context);customColour=UiStyle.preferences(context).getInt("colour",0xffe5384f);activity=(MainActivity)instrumentation.startActivitySync(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}
+  @After public void cleanup(){if(activity!=null)main(()->activity.finish());Preferences.get(context).edit().putBoolean("downloadsPaused",false).commit();if(accentId.equals("custom"))AccentStore.custom(context,customColour);else AccentStore.preset(context,accentId);}
   @Test public void searchAlbumBackRestoresSearchQueryFilterAndResults()throws Exception {
     main(()->{
       set("searchText","My album");set("searchFilter","Albums");
@@ -88,7 +89,7 @@ public class RequestedChangesIntegrationTest {
     } finally {downloads.remove(track);}
   }
   @Test public void customSchemesRetainContrastAndSettingsExposeControls()throws Exception {
-    assertEquals(0xff2f5be0,UiStyle.LIGHT.accent());assertEquals(0xff3e6cf2,UiStyle.DARK.accent());
+    assertEquals(0xffd12b45,UiStyle.LIGHT.accent());assertEquals(0xffda354b,UiStyle.DARK.accent());
     for(UiStyle.Palette palette:List.of(UiStyle.LIGHT,UiStyle.DARK)) {
       assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(palette.onAccent(),palette.accent())>=4.5);
       assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(palette.accent(),palette.background())>=4.5);
@@ -99,8 +100,8 @@ public class RequestedChangesIntegrationTest {
       assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(palette.onAccent(),palette.accent())>=4.5);
       assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(palette.ink(),palette.surface())>=4.5);
     }
-    UiStyle.preferences(context).edit().putInt("colour",0xff9966ee).commit();main(()->activity.finish());launch();
-    main(()->{assertEquals(UiStyle.palette(context).accent(),field("accent"));call("settings");View root=activity.getWindow().getDecorView();assertNotNull(text(root,"Colour scheme"));assertNotNull(text(root,"Download connection"));assertNotNull(text(root,"Download queue"));});
+    AccentStore.custom(context,0xff9966ee);main(()->activity.finish());activity=(MainActivity)instrumentation.startActivitySync(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    main(()->{assertEquals(UiStyle.palette(context).accent(),field("accent"));call("settings");View root=activity.getWindow().getDecorView();assertNotNull(text(root,"Accent colour"));assertNotNull(text(root,"Download connection"));assertNotNull(text(root,"Download queue"));});
     screenshot("settings");main(()->((ScrollView)field("mainScroll")).fullScroll(View.FOCUS_DOWN));screenshot("colour-settings");
   }
   private void screenshot(String name)throws Exception {

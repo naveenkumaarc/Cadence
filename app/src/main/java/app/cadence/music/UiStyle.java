@@ -10,6 +10,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.view.View;
+import app.cadence.core.AccentPalette;
 import androidx.core.graphics.ColorUtils;
 
 /** Cadence's shared semantic design tokens. Appearance preferences stay phone-local. */
@@ -24,21 +25,14 @@ final class UiStyle {
   static final int HAIRLINE = 1, MINI_PLAYER_HEIGHT = 64;
   static final int MOTION_FAST = 120, MOTION_STANDARD = 220;
   static final int DOWNLOAD_GREEN = 0xff248a55;
-  static final int DESTRUCTIVE = 0xffff3b30;
 
   record Palette(
       int background, int surface, int raised, int ink, int muted, int accent, int accentPressed,
-      int accentContainer, int onAccent,
+      int accentContainer, int accentText, int onAccent, int danger,
       int outline, int track, int divider, int ripple, boolean light) {}
 
-  static final Palette DARK = new Palette(
-      0xff000000, 0xff1c1c1e, 0xff2c2c2e, 0xfff5f5f7, 0xffaeaeb2, 0xff3e6cf2,
-      0xff3158d0, 0xff1c2b5c, Color.WHITE, 0xff3a3a3c, 0xff48484a, 0xff38383a,
-      0x4d3158d0, false);
-  static final Palette LIGHT = new Palette(
-      Color.WHITE, 0xfff5f5f7, 0xfffafafc, 0xff1d1d1f, 0xff6e6e73, 0xff2f5be0,
-      0xff2448bd, 0xffe8edff, Color.WHITE, 0xffd2d2d7, 0xffd2d2d7, 0xffe0e0e0,
-      0x332448bd, true);
+  static final Palette DARK = create(false,0xffda354b,Color.WHITE);
+  static final Palette LIGHT = create(true,0xffd12b45,Color.WHITE);
 
   static android.content.SharedPreferences preferences(Context context) {
     return context.getSharedPreferences("appearance", 0);
@@ -53,31 +47,25 @@ final class UiStyle {
     boolean systemLight = (context.getResources().getConfiguration().uiMode
         & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_NO;
     boolean light = choice.equals("Light") || choice.equals("System") && systemLight;
-    if (!preferences(context).contains("colour")) return light ? LIGHT : DARK;
-    return scheme(preferences(context).getInt("colour", LIGHT.accent()), light);
+    AccentPalette.Resolved chosen=AccentStore.resolved(context,light);
+    return create(light,chosen.accent(),chosen.onAccent());
   }
 
   static Palette scheme(int colour, boolean light) {
-    Palette base = light ? LIGHT : DARK;
-    float[] hsv = new float[3];
-    Color.colorToHSV(colour, hsv);
-    float hue = hsv[0], saturation = Math.min(.92f, Math.max(.35f, hsv[1]));
-    int accent = tone(hue, saturation, light ? .72f : 1f);
-    for (int i = 0; i < 20 && ColorUtils.calculateContrast(accent, base.background()) < 4.5; i++)
-      accent = ColorUtils.blendARGB(accent, light ? Color.BLACK : Color.WHITE, .06f);
-    int onAccent = ColorUtils.calculateContrast(Color.WHITE, accent)
-            >= ColorUtils.calculateContrast(0xff1d1d1f, accent) ? Color.WHITE : 0xff1d1d1f;
-    for (int i = 0; i < 20 && ColorUtils.calculateContrast(onAccent, accent) < 4.5; i++)
-      accent = ColorUtils.blendARGB(accent, onAccent == Color.WHITE ? Color.BLACK : Color.WHITE, .05f);
-    int pressed=ColorUtils.blendARGB(accent,Color.BLACK,light?.18f:.14f);
-    int container=ColorUtils.blendARGB(base.surface(),accent,light?.11f:.24f);
-    int ripple = (pressed & 0x00ffffff) | (light ? 0x33000000 : 0x4d000000);
-    return new Palette(base.background(), base.surface(), base.raised(), base.ink(), base.muted(),
-        accent, pressed, container, onAccent, base.outline(), base.track(), base.divider(), ripple, light);
+    AccentPalette.Resolved chosen=AccentPalette.custom(colour,light);
+    return create(light,chosen.accent(),chosen.onAccent());
   }
 
-  private static int tone(float hue, float saturation, float value) {
-    return Color.HSVToColor(new float[] {hue, saturation, value});
+  private static Palette create(boolean light,int accent,int onAccent) {
+    int background=light?Color.WHITE:Color.BLACK,surface=light?0xfff5f5f7:0xff1c1c1e,
+        raised=light?0xfffafafc:0xff2c2c2e,ink=light?0xff1d1d1f:0xfff5f5f7,
+        muted=light?0xff6e6e73:0xffaeaeb2,outline=light?0xffd2d2d7:0xff3a3a3c,
+        track=light?0xffd2d2d7:0xff48484a,divider=light?0xffe0e0e0:0xff38383a;
+    int pressed=ColorUtils.blendARGB(accent,Color.BLACK,light?.18f:.14f);
+    int container=ColorUtils.blendARGB(surface,accent,light?.14f:.16f);
+    int ripple=(pressed&0x00ffffff)|(light?0x33000000:0x4d000000);
+    return new Palette(background,surface,raised,ink,muted,accent,pressed,container,accent,onAccent,
+        light?0xffd70015:0xffff453a,outline,track,divider,ripple,light);
   }
 
   static boolean motion(Context context) {

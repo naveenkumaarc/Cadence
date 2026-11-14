@@ -8,7 +8,14 @@ import android.widget.*;
 
 /** Applies the selected palette to native prompts as well as the main screens. */
 final class CadenceDialogBuilder extends AlertDialog.Builder {
+  private boolean destructivePositive;
   CadenceDialogBuilder(Context context){super(context);}
+  @Override public CadenceDialogBuilder setTitle(CharSequence title){super.setTitle(title);return this;}
+  @Override public CadenceDialogBuilder setMessage(CharSequence message){super.setMessage(message);return this;}
+  @Override public CadenceDialogBuilder setNegativeButton(CharSequence text,android.content.DialogInterface.OnClickListener listener){super.setNegativeButton(text,listener);return this;}
+  CadenceDialogBuilder setDestructivePositiveButton(CharSequence text,android.content.DialogInterface.OnClickListener listener){
+    destructivePositive=true;super.setPositiveButton(text,listener);return this;
+  }
   @Override public AlertDialog create() {
     AlertDialog dialog=super.create();
     View decor=dialog.getWindow().getDecorView();
@@ -20,13 +27,15 @@ final class CadenceDialogBuilder extends AlertDialog.Builder {
         dialog.getWindow().setDimAmount(.42f);
         dialog.getWindow().setElevation(0);
         tint(view,palette);
+        if(destructivePositive&&dialog.getButton(AlertDialog.BUTTON_POSITIVE)!=null)
+          dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(palette.danger());
       });}
       @Override public void onViewDetachedFromWindow(View view){}
     });return dialog;
   }
   private static void tint(View view,UiStyle.Palette palette) {
     if(view instanceof TextView text&&!"colourPreview".equals(view.getTag())) {
-      text.setTextColor(view instanceof Button?palette.accent():palette.ink());
+      text.setTextColor(view instanceof Button?palette.accentText():palette.ink());
       if(view instanceof Button) {
         view.setMinimumHeight(UiStyle.dp(view.getContext(),UiStyle.TOUCH));
         text.setAllCaps(false); text.setTextSize(UiStyle.BODY);

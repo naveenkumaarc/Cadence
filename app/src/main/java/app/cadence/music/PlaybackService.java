@@ -76,7 +76,8 @@ public final class PlaybackService extends MediaLibraryService {
       MOVE = "app.cadence.MOVE",
       RESTORE = "app.cadence.RESTORE",
       SLEEP_TIMER = "app.cadence.SLEEP_TIMER",
-      EQUALIZER = "app.cadence.EQUALIZER";
+      EQUALIZER = "app.cadence.EQUALIZER",
+      APPEARANCE_CHANGED = "app.cadence.APPEARANCE_CHANGED";
   private final android.os.Handler handler =
       new android.os.Handler(android.os.Looper.getMainLooper());
   private final java.util.concurrent.ExecutorService disk =
@@ -96,6 +97,7 @@ public final class PlaybackService extends MediaLibraryService {
   @Override
   public void onCreate() {
     super.onCreate();
+    setMediaNotificationProvider(new AccentNotificationProvider(this));
     // Keep paused playback eligible for foreground resumption for Media3's bounded grace period.
     setForegroundServiceTimeoutMs(DEFAULT_FOREGROUND_SERVICE_TIMEOUT_MS);
     savedQueue = new android.util.AtomicFile(new java.io.File(getFilesDir(), "queue.json"));
@@ -460,6 +462,12 @@ public final class PlaybackService extends MediaLibraryService {
     handler.postDelayed(checkpoint, 5000);
     handler.post(playbackTick);
     publishWidget();
+  }
+
+  @Override public int onStartCommand(Intent intent,int flags,int startId) {
+    int result=super.onStartCommand(intent,flags,startId);
+    if(intent!=null&&APPEARANCE_CHANGED.equals(intent.getAction())&&session!=null)onUpdateNotification(session);
+    return result;
   }
 
   private void requestCarDiscovery() {

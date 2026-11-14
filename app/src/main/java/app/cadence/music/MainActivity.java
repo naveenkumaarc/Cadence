@@ -44,6 +44,7 @@ import app.cadence.core.MusicCatalog;
 import app.cadence.core.PlaylistCsv;
 import app.cadence.core.Podcasts;
 import app.cadence.core.QueueShuffle;
+import app.cadence.core.AccentPalette;
 import app.cadence.core.SearchRanker;
 import app.cadence.core.Track;
 import app.cadence.core.YouTube;
@@ -61,7 +62,7 @@ import java.util.function.Consumer;
 
 public final class MainActivity extends Activity {
   private UiStyle.Palette palette;
-  private int BG, CARD, INK, MUTED, accent;
+  private int BG, CARD, INK, MUTED, accent, accentText;
   private RefreshScrollView mainScroll;
   private MiniProgress miniProgress;
   private android.widget.GridLayout libraryGrid;
@@ -453,7 +454,7 @@ public final class MainActivity extends Activity {
   }
 
   private void applyPaletteValues() {
-    palette=UiStyle.palette(this);BG=palette.background();CARD=palette.surface();INK=palette.ink();MUTED=palette.muted();accent=palette.accent();
+    palette=UiStyle.palette(this);BG=palette.background();CARD=palette.surface();INK=palette.ink();MUTED=palette.muted();accent=palette.accent();accentText=palette.accentText();
   }
 
   private AppIcon icon(String name, String label, Runnable action) {
@@ -501,8 +502,8 @@ public final class MainActivity extends Activity {
       String origin=screenHistory.get(0).getString("page",selected);if(navIcons.containsKey(origin))selected=origin;
     }
     for (String key : navIcons.keySet()) {
-      navIcons.get(key).colour(key.equals(selected) ? accent : MUTED);
-      navLabels.get(key).setTextColor(key.equals(selected) ? accent : MUTED);
+      navIcons.get(key).colour(key.equals(selected) ? accentText : MUTED);
+      navLabels.get(key).setTextColor(key.equals(selected) ? accentText : MUTED);
     }
   }
 
@@ -1060,7 +1061,7 @@ public final class MainActivity extends Activity {
     String detail=item.ranking().document().type().name().substring(0,1)+item.ranking().document().type().name().substring(1).toLowerCase(java.util.Locale.ROOT);
     if(!item.ranking().document().artist().isBlank())detail+=" - "+item.ranking().document().artist();
     TextView subtitle=text(detail,UiStyle.FOOTNOTE,MUTED,false);subtitle.setSingleLine(true);subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);labels.addView(subtitle);
-    card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));card.addView(new AppIcon(this,"arrow",accent,"Open "+item.ranking().document().title()),new LinearLayout.LayoutParams(dp(48),dp(48)));
+    card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));card.addView(new AppIcon(this,"arrow",accentText,"Open "+item.ranking().document().title()),new LinearLayout.LayoutParams(dp(48),dp(48)));
     card.setOnClickListener(v->openSearchItem(item));body.addView(card);
   }
 
@@ -1230,7 +1231,7 @@ public final class MainActivity extends Activity {
                         new CadenceDialogBuilder(this)
                             .setMessage("Delete this playlist from Cadence?")
                             .setNegativeButton("Cancel", null)
-                            .setPositiveButton(
+                            .setDestructivePositiveButton(
                                 "Delete",
                                 (dd, nn) -> {
                                   library.playlists.remove(playlist);
@@ -1329,7 +1330,7 @@ public final class MainActivity extends Activity {
         text(
             track.artist + (track.sourceUrl.isEmpty() ? " · Match song" : ""),
             12,
-            track.sourceUrl.isEmpty() ? accent : MUTED,
+            track.sourceUrl.isEmpty() ? accentText : MUTED,
             false);
     artist.setMaxLines(1);
     artist.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -1421,7 +1422,7 @@ public final class MainActivity extends Activity {
       TextView pickerTitle=text(playlist.id.equals("favourites")?"Liked Songs":playlist.name,UiStyle.BODY,INK,true);
       pickerTitle.setMaxLines(2);pickerTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);labels.addView(pickerTitle);
       labels.addView(text(playlist.tracks.size()+" songs",12,MUTED,false));card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
-      AppIcon arrow=new AppIcon(this,"plus",accent,"Add to "+playlist.name);arrow.setFocusable(false);card.addView(arrow,new LinearLayout.LayoutParams(dp(48),dp(48)));
+      AppIcon arrow=new AppIcon(this,"plus",accentText,"Add to "+playlist.name);arrow.setFocusable(false);card.addView(arrow,new LinearLayout.LayoutParams(dp(48),dp(48)));
       card.setFocusable(true);card.setContentDescription("Add "+track.title+" to "+playlist.name);
       card.setOnClickListener(v->{add(playlist,track);dialog.dismiss();toast("Saved to "+playlist.name);});
       LinearLayout.LayoutParams size=new LinearLayout.LayoutParams(-1,-2);size.setMargins(0,dp(8),0,0);cards.addView(card,size);
@@ -1867,11 +1868,11 @@ public final class MainActivity extends Activity {
       else if (!playerSeeking) playerSeek.setProgress(0);
       playerSeek.setEnabled(total > 0 && controller.isCurrentMediaItemSeekable());
       if (playerShuffle != null)
-        playerShuffle.colour(controller.getShuffleModeEnabled() ? accent : INK);
+        playerShuffle.colour(controller.getShuffleModeEnabled() ? accentText : INK);
       if (playerRepeat != null) {
         playerRepeat.symbol(controller.getRepeatMode() == Player.REPEAT_MODE_ONE ? "repeatOne" : "repeat");
         playerRepeat.colour(
-            controller.getRepeatMode() == Player.REPEAT_MODE_OFF ? INK : accent);
+            controller.getRepeatMode() == Player.REPEAT_MODE_OFF ? INK : accentText);
       }
       updateTimeLabels(position, total);
       playerContext.setText(podcast ? "PLAYING FROM PODCAST" : "NOW PLAYING");
@@ -2459,10 +2460,10 @@ public final class MainActivity extends Activity {
   private View podcastAction(String symbol,String label,boolean selected,Runnable action) {
     LinearLayout control=row();control.setGravity(Gravity.CENTER);control.setPadding(dp(6),0,dp(6),0);
     control.setBackground(ripple(selected?palette.accentContainer():palette.surface(),UiStyle.RADIUS_PILL));
-    if(symbol!=null){AppIcon image=new AppIcon(this,symbol,selected?accent:INK,"");image.setFocusable(false);
+    if(symbol!=null){AppIcon image=new AppIcon(this,symbol,selected?accentText:INK,"");image.setFocusable(false);
       image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);image.setMinimumWidth(0);image.setMinimumHeight(0);
       control.addView(image,new LinearLayout.LayoutParams(dp(24),dp(32)));}
-    TextView text=text(label,UiStyle.FOOTNOTE,selected?accent:INK,true);text.setSingleLine(true);
+    TextView text=text(label,UiStyle.FOOTNOTE,selected?accentText:INK,true);text.setSingleLine(true);
     text.setEllipsize(android.text.TextUtils.TruncateAt.END);text.setGravity(Gravity.CENTER);text.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
     control.addView(text,new LinearLayout.LayoutParams(-2,-2));control.setContentDescription(label);control.setFocusable(true);
     control.setOnClickListener(v->UiStyle.press(v,action));return control;
@@ -2612,7 +2613,7 @@ public final class MainActivity extends Activity {
       new CadenceDialogBuilder(this).setTitle(d.complete?"Remove download?":"Cancel download?")
           .setMessage(d.complete?"This episode will use streaming next time.":"The partial episode download will be removed.")
           .setNegativeButton(d.complete?"Keep download":"Keep downloading",null)
-          .setPositiveButton(d.complete?"Remove download":"Cancel download",(dialog,n)-> {
+          .setDestructivePositiveButton(d.complete?"Remove download":"Cancel download",(dialog,n)-> {
             try {podcasts.deleteDownload(e.id);DownloadList.forget(this,e.track());refreshDownloadButtons();}
             catch(Exception failure){error("Removing download",failure);}
           }).show();
@@ -2664,10 +2665,7 @@ public final class MainActivity extends Activity {
           .setItems(new String[] {state.complete ? "Play offline" : "Keep downloading",
               state.complete ? "Remove download" : "Cancel download"}, (dialog, which) -> {
             if (which == 0 && state.complete) play(track, List.of(track));
-            if (which == 1) {
-              try { songDownloads.remove(track); refreshSongDownloads(); toast("Download removed. Your playlists are kept."); }
-              catch (Exception failure) { error("Removing download", failure); }
-            }
+            if (which == 1)confirmSongDownloadRemoval(track,state.complete);
           }).show();
       return;
     }
@@ -2675,6 +2673,16 @@ public final class MainActivity extends Activity {
     if ("file".equals(scheme) || "content".equals(scheme)) { toast("This audio is already on your phone."); return; }
     work("Preparing song download…", () -> { songDownloads.start(track); return true; },
         ignored -> { toast("Song download started"); refreshSongDownloads(); });
+  }
+
+  private void confirmSongDownloadRemoval(Track track,boolean complete) {
+    new CadenceDialogBuilder(this).setTitle(complete?"Remove download?":"Cancel download?")
+        .setMessage(complete?"The song stays in your playlists and will stream next time.":"The partial song download will be removed.")
+        .setNegativeButton(complete?"Keep download":"Keep downloading",null)
+        .setDestructivePositiveButton(complete?"Remove download":"Cancel download",(dialog,which)->{
+          try{songDownloads.remove(track);refreshSongDownloads();toast(complete?"Download removed. Your playlists are kept.":"Download cancelled.");}
+          catch(Exception failure){error("Removing download",failure);}
+        }).show();
   }
 
   private void requestSongDuration(Track track) {
@@ -2870,7 +2878,7 @@ public final class MainActivity extends Activity {
     LinearLayout labels = column();
     labels.setPadding(dp(12), 0, 0, 0);
     TextView title =
-        text(String.valueOf(item.mediaMetadata.title), 14, current ? accent : INK, true);
+        text(String.valueOf(item.mediaMetadata.title), 14, current ? accentText : INK, true);
     title.setMaxLines(1);
     title.setEllipsize(android.text.TextUtils.TruncateAt.END);
     labels.addView(title);
@@ -3027,23 +3035,55 @@ public final class MainActivity extends Activity {
     }).setNegativeButton("Cancel",null).show();
   }
 
-  private void chooseColour() {
-    LinearLayout box=column();box.setPadding(dp(20),dp(12),dp(20),dp(12));
-    int chosen=UiStyle.preferences(this).getInt("colour",UiStyle.LIGHT.accent());float[] hsv=new float[3];Color.colorToHSV(chosen,hsv);
-    TextView preview=text("Cadence · Your colour",20,INK,true);preview.setTag("colourPreview");preview.setGravity(Gravity.CENTER);preview.setPadding(dp(12),dp(24),dp(12),dp(24));box.addView(preview);
-    box.addView(text("Hue",14,INK,true));SeekBar hue=new SeekBar(this);hue.setMax(359);hue.setProgress((int)hsv[0]);hue.setContentDescription("Colour hue");box.addView(hue,new LinearLayout.LayoutParams(-1,dp(48)));
-    box.addView(text("Saturation",14,INK,true));SeekBar saturation=new SeekBar(this);saturation.setMax(100);saturation.setProgress((int)(hsv[1]*100));saturation.setContentDescription("Colour saturation");box.addView(saturation,new LinearLayout.LayoutParams(-1,dp(48)));
-    EditText hex=input("Hex colour (#RRGGBB)",String.format(java.util.Locale.ROOT,"#%06X",chosen&0xffffff));hex.setSingleLine(true);box.addView(hex);
-    final boolean[] updating={false};final int[] selected={chosen};
-    Runnable updatePreview=()->{UiStyle.Palette sample=UiStyle.scheme(selected[0],palette.light());preview.setTextColor(sample.onAccent());preview.setBackground(round(sample.accent(),16));hue.setProgressTintList(ColorStateList.valueOf(sample.accent()));hue.setThumbTintList(ColorStateList.valueOf(sample.accent()));saturation.setProgressTintList(ColorStateList.valueOf(sample.accent()));saturation.setThumbTintList(ColorStateList.valueOf(sample.accent()));};
-    SeekBar.OnSeekBarChangeListener listener=new SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}public void onProgressChanged(SeekBar b,int progress,boolean user){if(!user)return;selected[0]=Color.HSVToColor(new float[]{hue.getProgress(),saturation.getProgress()/100f,1});updating[0]=true;hex.setText(String.format(java.util.Locale.ROOT,"#%06X",selected[0]&0xffffff));updating[0]=false;updatePreview.run();}};
-    hue.setOnSeekBarChangeListener(listener);saturation.setOnSeekBarChangeListener(listener);
-    hex.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int d){}public void afterTextChanged(android.text.Editable e){}public void onTextChanged(CharSequence value,int a,int b,int c){if(updating[0])return;String colour=value.toString();if(colour.matches("#[0-9a-fA-F]{6}")){selected[0]=Color.parseColor(colour);float[] pick=new float[3];Color.colorToHSV(selected[0],pick);hue.setProgress((int)pick[0]);saturation.setProgress((int)(pick[1]*100));updatePreview.run();}}});
-    updatePreview.run();ScrollView scroll=new ScrollView(this);scroll.addView(box);
-    AlertDialog dialog=new CadenceDialogBuilder(this).setTitle("Colour scheme").setView(scroll).setNegativeButton("Cancel",null)
-        .setNeutralButton("Reset to indigo",(d,n)->{UiStyle.preferences(this).edit().remove("colour").apply();CadenceWidget.updateAll(this);recreate();})
-        .setPositiveButton("Apply",null).create();
-    dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{if(!hex.getText().toString().matches("#[0-9a-fA-F]{6}")){hex.setError("Use #RRGGBB");return;}UiStyle.preferences(this).edit().putInt("colour",selected[0]).apply();CadenceWidget.updateAll(this);dialog.dismiss();recreate();}));dialog.show();
+  private void showAccentPicker(){showAccentPicker(true);}
+  private void showAccentPicker(boolean remember) {
+    if(remember)rememberScreen();clear("Accent colour","");
+    body.addView(text("Accent colour",UiStyle.DISPLAY,INK,true));gap(6);
+    body.addView(text("Choose the colour used for primary actions and selections.",UiStyle.BODY,MUTED,false));gap(20);
+    appearanceControl();gap(22);accentPreview();gap(22);
+    searchHeading("Presets",null);android.widget.GridLayout grid=new android.widget.GridLayout(this);grid.setColumnCount(getResources().getConfiguration().screenWidthDp>=600?4:3);
+    String current=AccentStore.id(this);
+    for(AccentPalette.Preset preset:AccentPalette.PRESETS) {
+      boolean selected=current.equals(preset.id());LinearLayout item=column();item.setGravity(Gravity.CENTER);item.setPadding(dp(2),dp(4),dp(2),dp(8));
+      item.setContentDescription(preset.label()+(selected?", selected":""));item.setFocusable(true);item.setMinimumHeight(dp(76));
+      android.widget.FrameLayout circle=new android.widget.FrameLayout(this);GradientDrawable swatch=new GradientDrawable();swatch.setShape(GradientDrawable.OVAL);swatch.setColor(preset.accent(palette.light()));circle.setBackground(swatch);
+      if(selected){AppIcon check=new AppIcon(this,"check",preset.onAccent(palette.light()),"");check.setFocusable(false);check.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);circle.addView(check,new android.widget.FrameLayout.LayoutParams(dp(48),dp(48),Gravity.CENTER));}
+      item.addView(circle,new LinearLayout.LayoutParams(dp(48),dp(48)));TextView label=text(preset.label(),UiStyle.CAPTION,INK,selected);label.setGravity(Gravity.CENTER);label.setMaxLines(2);item.addView(label,new LinearLayout.LayoutParams(-1,-2));
+      item.setBackground(ripple(Color.TRANSPARENT,UiStyle.RADIUS_MEDIUM));item.setOnClickListener(v->applyAccent(()->AccentStore.preset(this,preset.id())));
+      android.widget.GridLayout.LayoutParams size=new android.widget.GridLayout.LayoutParams();size.width=0;size.height=-2;size.columnSpec=android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED,1f);size.setMargins(dp(2),dp(2),dp(2),dp(2));grid.addView(item,size);
+    }
+    body.addView(grid,new LinearLayout.LayoutParams(-1,-2));gap(18);
+    searchHeading("Custom colour",null);int chosen=UiStyle.preferences(this).getInt("colour",palette.accent());float[] hsv=new float[3];Color.colorToHSV(chosen,hsv);
+    LinearLayout custom=column();custom.setPadding(dp(16),dp(14),dp(16),dp(16));custom.setBackground(round(CARD,UiStyle.RADIUS_CARD));
+    TextView sample=text("Custom colour preview",UiStyle.BODY,INK,true);sample.setTag("colourPreview");sample.setGravity(Gravity.CENTER);sample.setPadding(dp(12),dp(16),dp(12),dp(16));custom.addView(sample);
+    TextView notice=text("",UiStyle.FOOTNOTE,MUTED,false);notice.setGravity(Gravity.CENTER);notice.setPadding(0,dp(8),0,dp(8));custom.addView(notice);
+    custom.addView(text("Hue",UiStyle.FOOTNOTE,MUTED,true));SeekBar hue=new SeekBar(this);hue.setMax(359);hue.setProgress((int)hsv[0]);hue.setContentDescription("Custom colour hue");custom.addView(hue,new LinearLayout.LayoutParams(-1,dp(48)));
+    custom.addView(text("Lightness",UiStyle.FOOTNOTE,MUTED,true));SeekBar lightness=new SeekBar(this);lightness.setMax(100);lightness.setProgress((int)(hsv[2]*100));lightness.setContentDescription("Custom colour lightness");custom.addView(lightness,new LinearLayout.LayoutParams(-1,dp(48)));
+    EditText hex=input("Hex colour (#RRGGBB)",String.format(java.util.Locale.ROOT,"#%06X",chosen&0xffffff));hex.setSingleLine(true);hex.setContentDescription("Custom colour hex value");custom.addView(hex);
+    final boolean[] updating={false};final int[] raw={chosen};final float[] saturation={Math.max(.20f,hsv[1])};
+    Runnable update=()->{var resolved=AccentPalette.custom(raw[0],palette.light());sample.setTextColor(resolved.onAccent());sample.setBackground(round(resolved.accent(),UiStyle.RADIUS_MEDIUM));
+      boolean adjusted=resolved.adjusted()||AccentPalette.custom(raw[0],!palette.light()).adjusted();notice.setText(adjusted?"Lightness is adjusted per theme to keep text readable.":"Passes WCAG AA in Light and Dark.");
+      ColorStateList tint=ColorStateList.valueOf(resolved.accent());hue.setProgressTintList(tint);hue.setThumbTintList(tint);lightness.setProgressTintList(tint);lightness.setThumbTintList(tint);};
+    SeekBar.OnSeekBarChangeListener listener=new SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(SeekBar bar){}public void onStopTrackingTouch(SeekBar bar){}public void onProgressChanged(SeekBar bar,int progress,boolean user){if(!user)return;raw[0]=Color.HSVToColor(new float[]{hue.getProgress(),saturation[0],Math.max(.05f,lightness.getProgress()/100f)});updating[0]=true;hex.setText(String.format(java.util.Locale.ROOT,"#%06X",raw[0]&0xffffff));updating[0]=false;update.run();}};
+    hue.setOnSeekBarChangeListener(listener);lightness.setOnSeekBarChangeListener(listener);
+    hex.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int b,int c){}public void afterTextChanged(android.text.Editable value){}public void onTextChanged(CharSequence value,int a,int b,int c){if(updating[0])return;String entered=value.toString();if(entered.matches("#[0-9a-fA-F]{6}")){raw[0]=Color.parseColor(entered);float[] pick=new float[3];Color.colorToHSV(raw[0],pick);saturation[0]=Math.max(.20f,pick[1]);hue.setProgress((int)pick[0]);lightness.setProgress((int)(pick[2]*100));update.run();}}});
+    update.run();custom.addView(button("Apply custom colour",true,()->{if(!hex.getText().toString().matches("#[0-9a-fA-F]{6}")){hex.setError("Use #RRGGBB");return;}applyAccent(()->AccentStore.custom(this,raw[0]));}),new LinearLayout.LayoutParams(-1,dp(UiStyle.TOUCH)));
+    body.addView(custom);gap(12);body.addView(button("Reset to default Rose",false,()->applyAccent(()->AccentStore.preset(this,"rose"))),new LinearLayout.LayoutParams(-1,dp(UiStyle.TOUCH)));
+  }
+
+  private void accentPreview() {
+    LinearLayout card=column();card.setPadding(dp(16),dp(16),dp(16),dp(16));card.setBackground(round(CARD,UiStyle.RADIUS_CARD));
+    card.addView(text("Live preview",UiStyle.SUBHEAD,MUTED,true));LinearLayout controls=row();controls.setPadding(0,dp(12),0,dp(8));
+    TransportButton play=new TransportButton(this,TransportButton.Icon.PLAY,palette.onAccent(),accent,"Sample play button");controls.addView(play,new LinearLayout.LayoutParams(dp(48),dp(48)));
+    Button selected=chip("Selected",true,()->{});selected.setContentDescription("Selected chip preview");controls.addView(selected);
+    android.widget.Switch toggle=new android.widget.Switch(this);toggle.setChecked(true);toggle.setContentDescription("Toggle preview, on");toggle.setThumbTintList(ColorStateList.valueOf(accent));toggle.setTrackTintList(ColorStateList.valueOf(palette.accentContainer()));controls.addView(toggle,new LinearLayout.LayoutParams(dp(56),dp(48)));card.addView(controls);
+    SeekBar slider=new SeekBar(this);slider.setProgress(62);slider.setEnabled(false);slider.setProgressTintList(ColorStateList.valueOf(accent));slider.setThumbTintList(ColorStateList.valueOf(accent));slider.setContentDescription("Slider preview");card.addView(slider,new LinearLayout.LayoutParams(-1,dp(40)));
+    ProgressBar progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);progress.setMax(100);progress.setProgress(72);progress.setProgressTintList(ColorStateList.valueOf(accent));progress.setProgressBackgroundTintList(ColorStateList.valueOf(palette.track()));progress.setContentDescription("Progress preview, 72 percent");card.addView(progress,new LinearLayout.LayoutParams(-1,dp(4)));body.addView(card);
+  }
+
+  private void applyAccent(Runnable change) {
+    change.run();applyPaletteValues();setTheme(palette.light()?R.style.AppLightTheme:R.style.AppTheme);buildShell();showAccentPicker(false);updatePlayer();CadenceWidget.updateAll(this);
+    try{startService(new Intent(this,PlaybackService.class).setAction(PlaybackService.APPEARANCE_CHANGED));}catch(Exception ignored){}
   }
 
   private void settings() {
@@ -3084,8 +3124,9 @@ public final class MainActivity extends Activity {
     settingRow(saved, "restore", "Restore backup", "Bring your saved library into Cadence", () -> pickFile(15, "*/*", null));
     settingDivider(saved);
     settingRow(saved, "import", "Import from file", "Playlists, audio files or podcast feeds", this::showImport);
+    if(AccentStore.announcement(this))accentAnnouncement();
     LinearLayout personal = settingsGroup("Personalise");
-    settingRow(personal,"palette","Colour scheme",UiStyle.preferences(this).contains("colour")?"Custom colour":"Indigo blue",this::chooseColour);
+    settingRow(personal,"palette","Accent colour",AccentStore.label(this),this::showAccentPicker);
     settingDivider(personal);
     appearanceSwitch(personal,"Motion","Subtle screen transitions and loading animation","motion");
     settingDivider(personal);
@@ -3100,6 +3141,14 @@ public final class MainActivity extends Activity {
     settingRow(about, "info", "Playback diagnostics", "Connection, queue & playback details", this::diagnostics);
     gap(4);
     TextView version = text("Cadence " + BuildConfig.VERSION_NAME, 13, MUTED, false); version.setGravity(Gravity.CENTER); body.addView(version);
+  }
+
+  private void accentAnnouncement() {
+    LinearLayout card=column();card.setPadding(dp(16),dp(14),dp(10),dp(14));card.setBackground(round(palette.accentContainer(),UiStyle.RADIUS_CARD));
+    LinearLayout heading=row();LinearLayout copy=column();copy.addView(text("New accent colours are here",UiStyle.BODY,INK,true));copy.addView(text("Your existing blue is unchanged.",UiStyle.FOOTNOTE,MUTED,false));heading.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
+    heading.addView(icon("close","Dismiss new accent colours",()->{AccentStore.dismissAnnouncement(this);settings();}),new LinearLayout.LayoutParams(dp(48),dp(48)));card.addView(heading);
+    card.addView(button("Choose an accent",false,()->{AccentStore.dismissAnnouncement(this);showAccentPicker();}),new LinearLayout.LayoutParams(-1,dp(UiStyle.TOUCH)));
+    LinearLayout.LayoutParams size=new LinearLayout.LayoutParams(-1,-2);size.setMargins(0,0,0,dp(UiStyle.SPACE_6));body.addView(card,size);
   }
 
   private void appearanceControl() {
@@ -3453,7 +3502,7 @@ public final class MainActivity extends Activity {
       settingDivider(cloud); settingRow(cloud,"restore","Choose backup to restore","Device names, dates and times",this::cloudRecovery);
       settingDivider(cloud); settingRow(cloud,"play","Continue listening","Resume the queue saved in Drive",this::resumeCloudQueue);
       settingDivider(cloud); settingRow(cloud,"close","Sign out","Keep the current library on this phone",()->new CadenceDialogBuilder(this).setTitle("Sign out of Google?")
-          .setMessage("Sync will stop. Your current library remains on this phone.").setNegativeButton("Cancel",null).setPositiveButton("Sign out",(d,n)-> {
+          .setMessage("Sync will stop. Your current library remains on this phone.").setNegativeButton("Cancel",null).setDestructivePositiveButton("Sign out",(d,n)-> {
             try { CloudSync.signOut(this); googleLogin.clear(); refreshProfilePhoto(); showProfile(); } catch(Exception e) { error("Sign out",e); }
           }).show());
     }
@@ -3599,7 +3648,7 @@ public final class MainActivity extends Activity {
 
   private void emptyState(LinearLayout target,String symbol,String title,String copy,String cta,Runnable action,String secondary,Runnable second) {
     LinearLayout card=column();card.setPadding(dp(24),dp(24),dp(24),dp(24));card.setBackground(round(CARD,20));
-    AppIcon illustration=new AppIcon(this,symbol,accent,"");illustration.setFocusable(false);illustration.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);card.addView(illustration,new LinearLayout.LayoutParams(dp(48),dp(48)));
+    AppIcon illustration=new AppIcon(this,symbol,accentText,"");illustration.setFocusable(false);illustration.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);card.addView(illustration,new LinearLayout.LayoutParams(dp(48),dp(48)));
     TextView heading=text(title,UiStyle.TITLE,INK,true);androidx.core.view.ViewCompat.setAccessibilityHeading(heading,true);heading.setPadding(0,dp(16),0,dp(8));card.addView(heading);
     TextView detail=text(copy,UiStyle.BODY,MUTED,false);detail.setPadding(0,0,0,dp(16));card.addView(detail);
     if(action!=null)card.addView(button(cta,true,action),new LinearLayout.LayoutParams(-1,-2));
@@ -3646,7 +3695,7 @@ public final class MainActivity extends Activity {
     String name=state.getString("page","Home");
     if(name.equals("Collection")&&collectionEntry!=null){boolean previous=restoringScreen;restoringScreen=true;try{openCollection(collectionEntry);}finally{restoringScreen=previous;}}
     else if(name.equals("Download queue"))showDownloadQueue();
-    else if(name.equals("Settings"))settings();else if(name.equals("Profile"))showProfile();
+    else if(name.equals("Settings"))settings();else if(name.equals("Accent colour"))showAccentPicker(false);else if(name.equals("Profile"))showProfile();
     else if(name.equals("Search")){showSearch();if(!searchText.isBlank()&&catalogResults.isEmpty())searchMusic();}
     else if(name.equals("Playlist")){String id=state.getString("playlist","");if(id.equals(SongDownloads.PLAYLIST_ID))showPlaylist(songDownloads.playlist());else {Library.Playlist found=library.playlists.stream().filter(x->x.id.equals(id)).findFirst().orElse(null);if(found!=null)showPlaylist(found);else showLibrary();}}
     else if(name.equals("Show")){String feed=state.getString("feed","");Podcasts.Show found=podcasts.knownShows().stream().filter(x->x.feedUrl.equals(feed)).findFirst().orElse(null);if(found!=null)showPodcast(found);else showPodcasts();}
@@ -3747,7 +3796,7 @@ public final class MainActivity extends Activity {
   private android.widget.FrameLayout iconTile(String symbol,String label) {
     android.widget.FrameLayout tile=new android.widget.FrameLayout(this);
     tile.setBackground(round(palette.accentContainer(),UiStyle.RADIUS_MEDIUM));
-    AppIcon image=new AppIcon(this,symbol,accent,label);image.setFocusable(false);
+    AppIcon image=new AppIcon(this,symbol,accentText,label);image.setFocusable(false);
     image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
     image.setMinimumWidth(0);image.setMinimumHeight(0);
     tile.addView(image,new android.widget.FrameLayout.LayoutParams(-1,-1,Gravity.CENTER));
