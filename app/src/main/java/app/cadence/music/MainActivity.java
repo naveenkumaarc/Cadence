@@ -44,13 +44,16 @@ import app.cadence.core.MusicCatalog;
 import app.cadence.core.PlaylistCsv;
 import app.cadence.core.Podcasts;
 import app.cadence.core.QueueShuffle;
+import app.cadence.core.SearchRanker;
 import app.cadence.core.Track;
 import app.cadence.core.YouTube;
 import com.google.common.util.concurrent.ListenableFuture;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -112,8 +115,11 @@ public final class MainActivity extends Activity {
   private final java.util.Map<String, String> languageErrors = new java.util.HashMap<>();
   private java.util.concurrent.Future<?> suggestionTask;
   private final ExecutorService suggestions = Executors.newFixedThreadPool(2);
+  private final ExecutorService searchNetwork = Executors.newFixedThreadPool(5);
   private int suggestionGeneration;
   private Runnable pendingSuggestion;
+  private Runnable pendingSearch;
+  private java.util.concurrent.Future<?> searchTask;
   private String queueStamp = "";
   private android.content.BroadcastReceiver downloadsReceiver;
   private MediaController controller;
@@ -125,6 +131,14 @@ public final class MainActivity extends Activity {
   private final ArrayList<Bundle> screenHistory=new ArrayList<>();
   private boolean restoringScreen;
   private List<Podcasts.Show> podcastResults=new ArrayList<>();
+  private List<SearchItem> rankedSearch=new ArrayList<>();
+  private final java.util.LinkedHashMap<String,CachedSearch> searchCache=new java.util.LinkedHashMap<>();
+  private record SearchItem(SearchRanker.Ranked ranking,MusicCatalog.Entry music,Podcasts.Show podcast) {}
+  private record SearchSignals(java.util.Set<String> liked,java.util.Set<String> downloaded,
+      java.util.Set<String> recent,java.util.Set<String> subscribed,String preferredLanguage) {}
+  private record SearchPayload(List<MusicCatalog.Entry> music,List<Podcasts.Show> podcasts,
+      List<SearchItem> ranked,String error) {}
+  private record CachedSearch(long at,SearchPayload payload) {}
   private final java.util.Map<String, DownloadRow> downloadRows=new java.util.LinkedHashMap<>();
   private Button allDownloadsToggle;
   private record DownloadRow(Track track,TextView label,ProgressBar bar,Button toggle) {}
@@ -284,6 +298,7 @@ public final class MainActivity extends Activity {
     workers.shutdownNow();
     discoveryWorkers.shutdownNow();
     suggestions.shutdownNow();
+    searchNetwork.shutdownNow();
     durationWorkers.shutdownNow();
     if (downloadsReceiver != null)
       try {
@@ -360,7 +375,7 @@ public final class MainActivity extends Activity {
         new LinearLayout.LayoutParams(dp(48), dp(48)));
     root.addView(header);
     RefreshScrollView scroll = new RefreshScrollView(this); mainScroll=scroll;
-    scroll.refreshAction(()->page.equals("Home")||page.equals("Search")&&!searchText.isBlank()&&!searchLoading,()->{if(page.equals("Home"))refreshDiscovery();else searchMusic();});
+    scroll.refreshAction(()->page.equals("Home")||page.equals("Search")&&!searchText.isBlank()&&!searchLoading,()->{if(page.equals("Home"))refreshDiscovery();else refreshSearch();});
     scroll.setFillViewport(true);
     scroll.setClipToPadding(false);
     body = column();
@@ -632,7 +647,7 @@ public final class MainActivity extends Activity {
       searchText = value;
       ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(query.getWindowToken(), 0);
       if (value.startsWith("http")) openYouTubeLink(value);
-      else { if (!searchPage) searchFilter = "All"; catalogResults.clear(); showSearch(); searchMusic(); }
+      else { if (!searchPage) searchFilter = "All"; showSearch(); searchMusic(); }
     };
     submitIcon.setOnClickListener(v -> submit.run());
     query.setOnEditorActionListener((v,id,event) -> {
@@ -644,9 +659,16 @@ public final class MainActivity extends Activity {
         clearQuery.setVisibility(value.length()==0?View.GONE:View.VISIBLE);
         if (searchPage) {
           searchText = value.toString();
-          searchGeneration++; searchLoading = false;
-          catalogResults.clear(); podcastResults.clear(); searchError = "";
-          if (searchResultsBody != null) searchResultsBody.setVisibility(View.GONE);
+          if(pendingSearch!=null)ui.removeCallbacks(pendingSearch);
+          if(searchTask!=null)searchTask.cancel(true);
+          String typed=value.toString().trim();
+          if(typed.length()<2) {
+            searchGeneration++;searchLoading=false;searchError="";catalogResults.clear();podcastResults.clear();rankedSearch.clear();
+            if(searchResultsBody!=null)searchResultsBody.setVisibility(View.GONE);
+          } else {
+            searchGeneration++;searchLoading=false;
+            pendingSearch=MainActivity.this::searchMusic;ui.postDelayed(pendingSearch,300);
+          }
         }
         int generation = ++suggestionGeneration;
         if (pendingSuggestion != null) ui.removeCallbacks(pendingSuggestion);
@@ -874,24 +896,93 @@ public final class MainActivity extends Activity {
     searchMusic();
   }
 
+  private void refreshSearch(){searchCache.remove(searchFilter+"\n"+SearchRanker.parse(searchText).normalized());searchMusic();}
+
   private void searchMusic() {
-    if (searchText.isBlank()) return;
-    int generation = ++searchGeneration;
-    final String term = searchText, filter = searchFilter;
-    searchLoading = true; searchError = ""; showSearch();
-    workers.execute(() -> {
-      List<MusicCatalog.Entry> found = new ArrayList<>();
-      List<Podcasts.Show> foundPodcasts=new ArrayList<>();String problem="";
-      if(!filter.equals("Podcasts"))try {found=filter.equals("All")?MusicCatalog.searchAll(term):MusicCatalog.search(term,filter);}
-      catch(Exception e){problem="Music search is unavailable. Check your connection and try again.";}
-      if(filter.equals("All")||filter.equals("Podcasts"))try {foundPodcasts=Podcasts.search(term);}
-      catch(Exception e){problem+=(problem.isEmpty()?"":"\n")+"Podcast search is unavailable. Check your connection and try again.";}
-      List<MusicCatalog.Entry> result = found;List<Podcasts.Show> shows=foundPodcasts; String error = problem;
-      ui.post(() -> {
-        if (destroyed || generation != searchGeneration || !page.equals("Search")) return;
-        searchLoading = false; searchError = error; catalogResults = result;podcastResults=shows; showSearch();
+    String term=searchText.trim();if(term.length()<2)return;
+    if(pendingSearch!=null)ui.removeCallbacks(pendingSearch);if(searchTask!=null)searchTask.cancel(true);
+    int generation=++searchGeneration;String filter=searchFilter;SearchRanker.Query query=SearchRanker.parse(term);
+    String cacheKey=filter+"\n"+query.normalized();CachedSearch cached=searchCache.get(cacheKey);
+    if(cached!=null&&System.currentTimeMillis()-cached.at()<120_000){applySearch(generation,cached.payload());return;}
+    searchLoading=true;searchError="";showSearch();SearchSignals signals=searchSignals();
+    searchTask=workers.submit(()->{
+      SearchPayload payload;
+      try{payload=fetchSearch(query,filter,signals);}catch(InterruptedException cancelled){Thread.currentThread().interrupt();return;}
+      catch(Exception failure){payload=new SearchPayload(List.of(),List.of(),List.of(),"Search is unavailable. Check your connection and try again.");}
+      SearchPayload result=payload;ui.post(()->{
+        if(destroyed||generation!=searchGeneration||!page.equals("Search"))return;
+        searchCache.put(cacheKey,new CachedSearch(System.currentTimeMillis(),result));
+        while(searchCache.size()>8)searchCache.remove(searchCache.keySet().iterator().next());
+        applySearch(generation,result);
       });
     });
+  }
+
+  private void applySearch(int generation,SearchPayload payload) {
+    if(generation!=searchGeneration)return;searchLoading=false;searchError=payload.error();
+    catalogResults=new ArrayList<>(payload.music());podcastResults=new ArrayList<>(payload.podcasts());
+    rankedSearch=new ArrayList<>(payload.ranked());showSearch();
+  }
+
+  private SearchPayload fetchSearch(SearchRanker.Query query,String filter,SearchSignals signals)throws Exception {
+    List<java.util.concurrent.Future<SearchPart>> tasks=new ArrayList<>();
+    if(filter.equals("All"))for(SearchRanker.Type type:List.of(SearchRanker.Type.SONG,SearchRanker.Type.ARTIST,
+        SearchRanker.Type.ALBUM,SearchRanker.Type.PLAYLIST,SearchRanker.Type.PODCAST))tasks.add(searchPart(query,type));
+    else tasks.add(searchPart(query,SearchRanker.Type.from(filter)));
+    List<MusicCatalog.Entry> music=new ArrayList<>();List<Podcasts.Show> shows=new ArrayList<>();List<String> errors=new ArrayList<>();
+    try{for(var task:tasks){SearchPart part=task.get();music.addAll(part.music());shows.addAll(part.podcasts());if(!part.error().isBlank())errors.add(part.error());}}
+    catch(InterruptedException cancelled){for(var task:tasks)task.cancel(true);throw cancelled;}
+    catch(java.util.concurrent.ExecutionException failure){throw new Exception(failure.getCause());}
+    return new SearchPayload(music,shows,rankSearch(query,music,shows,signals,filter.equals("All")),String.join("\n",new java.util.LinkedHashSet<>(errors)));
+  }
+
+  private record SearchPart(List<MusicCatalog.Entry> music,List<Podcasts.Show> podcasts,String error) {}
+  private java.util.concurrent.Future<SearchPart> searchPart(SearchRanker.Query query,SearchRanker.Type type) {
+    return searchNetwork.submit(()->{
+      String strict=query.remote(false),relaxed=query.remote(true);
+      if(type==SearchRanker.Type.PODCAST)try{
+        java.util.LinkedHashMap<String,Podcasts.Show> unique=new java.util.LinkedHashMap<>();
+        for(Podcasts.Show show:Podcasts.search(strict))unique.put(show.feedUrl,show);
+        if(!relaxed.equals(strict))for(Podcasts.Show show:Podcasts.search(relaxed))unique.putIfAbsent(show.feedUrl,show);
+        return new SearchPart(List.of(),new ArrayList<>(unique.values()),"");
+      }catch(Exception error){return new SearchPart(List.of(),List.of(),"Podcast search is unavailable. Check your connection and try again.");}
+      try{
+        java.util.LinkedHashMap<String,MusicCatalog.Entry> unique=new java.util.LinkedHashMap<>();
+        for(MusicCatalog.Entry entry:MusicCatalog.search(strict,type.label))unique.put(searchKey(entry),entry);
+        if(!relaxed.equals(strict))for(MusicCatalog.Entry entry:MusicCatalog.search(relaxed,type.label))unique.putIfAbsent(searchKey(entry),entry);
+        return new SearchPart(new ArrayList<>(unique.values()),List.of(),"");
+      }catch(Exception error){return new SearchPart(List.of(),List.of(),"Music search is unavailable. Check your connection and try again.");}
+    });
+  }
+
+  private static String searchKey(MusicCatalog.Entry entry) {
+    return entry.kind+":"+(entry.track!=null?entry.track.sourceUrl:entry.browseId)+":"+entry.title+":"+entry.artist;
+  }
+
+  private SearchSignals searchSignals() {
+    java.util.Set<String> liked=new java.util.HashSet<>(),downloaded=new java.util.HashSet<>(),recent=new java.util.HashSet<>(),subscribed=new java.util.HashSet<>();
+    if(library!=null)for(Library.Playlist playlist:library.playlists)if(playlist.id.equals("favourites"))for(Track track:playlist.tracks)liked.add(track.sourceUrl);
+    if(songDownloads!=null)for(Track track:songDownloads.tracks())downloaded.add(track.sourceUrl);
+    if(searchHistory!=null)for(MusicCatalog.Entry entry:searchHistory.entries())recent.add(searchKey(entry));
+    if(podcasts!=null)for(Podcasts.Show show:podcasts.subscriptions())subscribed.add(show.feedUrl);
+    String preferred=language.equals("All")?Preferences.languages(this).stream().findFirst().orElse(""):language;
+    return new SearchSignals(Set.copyOf(liked),Set.copyOf(downloaded),Set.copyOf(recent),Set.copyOf(subscribed),preferred);
+  }
+
+  private List<SearchItem> rankSearch(SearchRanker.Query query,List<MusicCatalog.Entry> music,List<Podcasts.Show> shows,
+      SearchSignals signals,boolean allTab) {
+    List<SearchRanker.Document> documents=new ArrayList<>();java.util.Map<String,MusicCatalog.Entry> musicById=new java.util.HashMap<>();
+    java.util.Map<String,Podcasts.Show> podcastsById=new java.util.HashMap<>();int index=0;
+    for(MusicCatalog.Entry entry:music){String id="music:"+(index++)+":"+searchKey(entry);musicById.put(id,entry);
+      SearchRanker.Type type=entry.track!=null?SearchRanker.Type.SONG:SearchRanker.Type.from(entry.kind);
+      String source=entry.track==null?"":entry.track.sourceUrl;String inferred=app.cadence.core.MoodAutoplay.language(entry.title+" "+entry.artist,signals.preferredLanguage());
+      documents.add(new SearchRanker.Document(id,type,entry.title,entry.artist,type==SearchRanker.Type.ALBUM?entry.title:"","","",inferred,0,
+          signals.liked().contains(source),signals.downloaded().contains(source),signals.recent().contains(searchKey(entry)),false));}
+    for(Podcasts.Show show:shows){String id="podcast:"+(index++)+":"+show.feedUrl;podcastsById.put(id,show);
+      documents.add(new SearchRanker.Document(id,SearchRanker.Type.PODCAST,show.title,show.author,"","","", "",0,false,false,false,signals.subscribed().contains(show.feedUrl)));}
+    List<SearchItem> result=new ArrayList<>();for(SearchRanker.Ranked ranked:SearchRanker.rank(query,documents,allTab))
+      result.add(new SearchItem(ranked,musicById.get(ranked.document().id()),podcastsById.get(ranked.document().id())));
+    return result;
   }
 
   private void showSearch() {
@@ -904,49 +995,92 @@ public final class MainActivity extends Activity {
     LinearLayout filters = row();
     for (String filter : List.of("All", "Songs", "Albums", "Artists", "Playlists", "Podcasts"))
       filters.addView(chip(filter, searchFilter.equals(filter), () -> {
-        searchFilter = filter; catalogResults.clear();podcastResults.clear(); searchError = "";
+        searchFilter = filter;searchError = "";
         showSearch(); searchMusic();
       }));
-    sc.setClipToPadding(false);sc.setPadding(dp(UiStyle.SCREEN_INSET),0,0,dp(UiStyle.SPACE_2));
-    sc.addView(filters);LinearLayout filterBar=row();filterBar.addView(sc,new LinearLayout.LayoutParams(0,-2,1));
-    AppIcon refresh=icon("refresh","Refresh search results",this::searchMusic);refresh.setEnabled(!searchText.isBlank()&&!searchLoading);refresh.setAlpha(refresh.isEnabled()?1:.4f);filterBar.addView(refresh,new LinearLayout.LayoutParams(dp(48),dp(48)));
-    LinearLayout.LayoutParams filterSize=new LinearLayout.LayoutParams(-1,-2);filterSize.setMargins(-dp(UiStyle.SCREEN_INSET),0,-dp(UiStyle.SCREEN_INSET),0);body.addView(filterBar,filterSize);gap(16);
+    sc.addView(filters);addBleedingHorizontal(sc,UiStyle.SPACE_2);gap(8);
     searchResultsBody = column(); body.addView(searchResultsBody);
     LinearLayout outer = body; body = searchResultsBody;
     try {
       if (searchText.isBlank()) { renderRecents(body); return; }
-      if (searchLoading) { body.addView(new SkeletonView(this,false)); return; }
+      if(rankedSearch.isEmpty()&&(!catalogResults.isEmpty()||!podcastResults.isEmpty()))
+        rankedSearch=rankSearch(SearchRanker.parse(searchText),catalogResults,podcastResults,searchSignals(),searchFilter.equals("All"));
+      if (searchLoading&&rankedSearch.isEmpty()) { body.addView(new SkeletonView(this,false)); return; }
+      if(searchLoading){TextView progress=text("Searching…",UiStyle.FOOTNOTE,MUTED,false);progress.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);body.addView(progress);gap(8);}
       if (!searchError.isEmpty()) {
         body.addView(text(searchError,14,MUTED,false));
         body.addView(button("Retry search",false,this::searchMusic));gap(12);
-        if(catalogResults.isEmpty()&&podcastResults.isEmpty())return;
+        if(rankedSearch.isEmpty())return;
       }
-      if (catalogResults.isEmpty()&&podcastResults.isEmpty()) {
+      if (rankedSearch.isEmpty()) {
         searchEmptyState(body,"No matches yet","Try a shorter title, another spelling, or one of these suggestions.");
         return;
       }
-      if(searchFilter.equals("Podcasts")) {
-        body.addView(sectionTitle("Podcasts"));gap(10);
-        for(Podcasts.Show show:podcastResults)podcastCard(body,show,()->previewPodcast(show.feedUrl));
-      } else if (searchFilter.equals("All")) {
-        if(!podcastResults.isEmpty()) {
-          body.addView(sectionTitle("Podcasts"));gap(10);
-          for(Podcasts.Show show:podcastResults.subList(0,Math.min(5,podcastResults.size())))podcastCard(body,show,()->previewPodcast(show.feedUrl));
-          body.addView(button("See all podcasts",false,()->{searchFilter="Podcasts";searchMusic();}));gap(20);
-        }
-        body.addView(sectionTitle("Songs")); gap(10);
-        int count = 0;
-        for (MusicCatalog.Entry entry : catalogResults)
-          if (entry.track != null && count++ < 5) searchEntryRow(body, entry, false);
-        body.addView(button("See all songs", false, () -> { searchFilter = "Songs"; searchMusic(); })); gap(20);
-        MusicCatalog.Shelf albums = new MusicCatalog.Shelf("Albums");
-        for (MusicCatalog.Entry entry : catalogResults) if (entry.kind.equals("album")) albums.entries.add(entry);
-        shelf(albums);
-      } else {
-        body.addView(sectionTitle(searchFilter)); gap(10);
-        for (MusicCatalog.Entry entry : catalogResults) searchEntryRow(body, entry, false);
-      }
+      if(searchFilter.equals("All"))renderAllSearch();else renderTypedSearch(SearchRanker.Type.from(searchFilter));
     } finally { body = outer; }
+  }
+
+  private void renderAllSearch() {
+    SearchItem top=rankedSearch.get(0);searchHeading("Top result",null);topResultCard(top);gap(22);
+    java.util.Map<SearchRanker.Type,List<SearchItem>> sections=new java.util.EnumMap<>(SearchRanker.Type.class);
+    for(SearchItem item:rankedSearch)if(item!=top)sections.computeIfAbsent(item.ranking().document().type(),ignored->new ArrayList<>()).add(item);
+    List<SearchRanker.Type> order=new ArrayList<>(sections.keySet());order.sort(Comparator
+        .<SearchRanker.Type>comparingDouble(type->sections.get(type).get(0).ranking().score()).reversed()
+        .thenComparingInt(type->List.of(SearchRanker.Type.SONG,SearchRanker.Type.ARTIST,SearchRanker.Type.ALBUM,SearchRanker.Type.PLAYLIST,SearchRanker.Type.PODCAST).indexOf(type)));
+    for(SearchRanker.Type type:order)renderSearchSection(type,sections.get(type));
+  }
+
+  private void renderTypedSearch(SearchRanker.Type type) {
+    List<SearchItem> items=rankedSearch.stream().filter(item->item.ranking().document().type()==type).toList();
+    searchHeading(type.label,null);gap(6);
+    for(SearchItem item:items)searchItemRow(item);
+  }
+
+  private void renderSearchSection(SearchRanker.Type type,List<SearchItem> items) {
+    if(items.isEmpty())return;searchHeading(type.label,()->{searchFilter=type.label;showSearch();searchMusic();});gap(6);
+    int limit=switch(type){case SONG->5;case ARTIST,PLAYLIST,PODCAST->3;case ALBUM->10;};
+    List<SearchItem> visible=items.subList(0,Math.min(limit,items.size()));
+    if(type==SearchRanker.Type.ALBUM)searchAlbumShelf(visible);else for(SearchItem item:visible)searchItemRow(item);
+    gap(20);
+  }
+
+  private void searchHeading(String title,Runnable seeAll) {
+    LinearLayout heading=row();TextView label=text(title,UiStyle.SUBHEAD,MUTED,true);label.setAllCaps(false);
+    label.setSingleLine(true);heading.addView(label,new LinearLayout.LayoutParams(0,dp(UiStyle.TOUCH),1));
+    if(seeAll!=null){Button link=button("See all",false,seeAll);link.setContentDescription("See all "+title.toLowerCase(java.util.Locale.ROOT));heading.addView(link,new LinearLayout.LayoutParams(-2,dp(UiStyle.TOUCH)));}
+    body.addView(heading);
+  }
+
+  private void topResultCard(SearchItem item) {
+    LinearLayout card=row();card.setPadding(dp(14),dp(14),dp(8),dp(14));card.setBackground(ripple(CARD,UiStyle.RADIUS_CARD));
+    Artwork art=new Artwork(this);if(item.ranking().document().type()==SearchRanker.Type.ARTIST)art.circle();
+    art.load(item.music()!=null?item.music().artwork:item.podcast().artwork);card.addView(art,new LinearLayout.LayoutParams(dp(76),dp(76)));
+    LinearLayout labels=column();labels.setPadding(dp(14),0,dp(4),0);TextView title=text(item.ranking().document().title(),UiStyle.HEADLINE,INK,true);
+    title.setMaxLines(2);title.setEllipsize(android.text.TextUtils.TruncateAt.END);labels.addView(title);
+    String detail=item.ranking().document().type().name().substring(0,1)+item.ranking().document().type().name().substring(1).toLowerCase(java.util.Locale.ROOT);
+    if(!item.ranking().document().artist().isBlank())detail+=" - "+item.ranking().document().artist();
+    TextView subtitle=text(detail,UiStyle.FOOTNOTE,MUTED,false);subtitle.setSingleLine(true);subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);labels.addView(subtitle);
+    card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));card.addView(new AppIcon(this,"arrow",accent,"Open "+item.ranking().document().title()),new LinearLayout.LayoutParams(dp(48),dp(48)));
+    card.setOnClickListener(v->openSearchItem(item));body.addView(card);
+  }
+
+  private void searchItemRow(SearchItem item) {
+    if(item.music()!=null)searchEntryRow(body,item.music(),false);
+    else podcastCard(body,item.podcast(),()->previewPodcast(item.podcast().feedUrl));
+  }
+
+  private void openSearchItem(SearchItem item) {
+    if(item.music()!=null){searchHistory.remember(item.music());if(item.music().track!=null)playRadio(item.music().track);else openCollection(item.music());}
+    else previewPodcast(item.podcast().feedUrl);
+  }
+
+  private void searchAlbumShelf(List<SearchItem> items) {
+    android.widget.HorizontalScrollView scroll=new android.widget.HorizontalScrollView(this);LinearLayout cards=row();cards.setGravity(Gravity.TOP);
+    for(SearchItem item:items){MusicCatalog.Entry entry=item.music();LinearLayout card=column();Artwork art=new Artwork(this);art.load(entry.artwork);card.addView(art,new LinearLayout.LayoutParams(dp(146),dp(146)));
+      TextView title=text(entry.title,UiStyle.BODY,INK,true);title.setMaxLines(2);title.setEllipsize(android.text.TextUtils.TruncateAt.END);title.setPadding(0,dp(8),0,0);card.addView(title);
+      TextView artist=text(entry.artist,UiStyle.CAPTION,MUTED,false);artist.setSingleLine(true);artist.setEllipsize(android.text.TextUtils.TruncateAt.END);card.addView(artist);
+      card.setBackground(ripple(Color.TRANSPARENT,UiStyle.RADIUS_CARD));card.setOnClickListener(v->openSearchItem(item));LinearLayout.LayoutParams size=new LinearLayout.LayoutParams(dp(154),-2);size.setMargins(0,0,dp(16),0);cards.addView(card,size);}
+    scroll.addView(cards);addBleedingHorizontal(scroll,UiStyle.SPACE_2);
   }
 
   private void renderRecents(LinearLayout target) {
@@ -974,10 +1108,10 @@ public final class MainActivity extends Activity {
     Artwork art = new Artwork(this); if (entry.kind.equals("artist")) art.circle();
     art.load(entry.artwork); item.addView(art, new LinearLayout.LayoutParams(dp(54), dp(54)));
     LinearLayout labels = column(); labels.setPadding(dp(12), 0, dp(4), 0);
-    TextView title = text(entry.title, UiStyle.BODY, INK, true); title.setMaxLines(2);
+    TextView title = text(entry.title, UiStyle.BODY, INK, true); title.setMaxLines(entry.track!=null?1:2);
     title.setEllipsize(android.text.TextUtils.TruncateAt.END); labels.addView(title);
     String kind = entry.kind.equals("artist") ? "Artist" : entry.kind.equals("album") ? "Album" : entry.track != null ? "Song" : "Playlist";
-    TextView detail = text(kind + (entry.artist.isEmpty() ? "" : " · " + entry.artist), 13, MUTED, false);
+    TextView detail = text(kind + (entry.artist.isEmpty() ? "" : " - " + entry.artist), 13, MUTED, false);
     detail.setSingleLine(true); detail.setEllipsize(android.text.TextUtils.TruncateAt.END); labels.addView(detail);
     item.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
     if (entry.track != null) item.addView(icon("save", "Save " + entry.title, () -> choosePlaylist(entry.track)), new LinearLayout.LayoutParams(dp(48), dp(48)));
