@@ -84,6 +84,12 @@ public class RequestedChangesIntegrationTest {
     } finally {downloads.remove(track);}
   }
   @Test public void customSchemesRetainContrastAndSettingsExposeControls()throws Exception {
+    assertEquals(0xff2f5be0,UiStyle.LIGHT.accent());assertEquals(0xff3e6cf2,UiStyle.DARK.accent());
+    for(UiStyle.Palette palette:List.of(UiStyle.LIGHT,UiStyle.DARK)) {
+      assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(palette.onAccent(),palette.accent())>=4.5);
+      assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(palette.accent(),palette.background())>=4.5);
+      assertNotEquals(palette.accent(),palette.accentPressed());assertNotEquals(palette.surface(),palette.accentContainer());
+    }
     for(int hue=0;hue<360;hue+=15)for(boolean light:new boolean[]{false,true}) {
       UiStyle.Palette palette=UiStyle.scheme(android.graphics.Color.HSVToColor(new float[]{hue,.85f,1}),light);
       assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(palette.onAccent(),palette.accent())>=4.5);

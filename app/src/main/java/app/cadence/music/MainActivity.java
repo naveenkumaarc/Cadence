@@ -2320,7 +2320,7 @@ public final class MainActivity extends Activity {
 
   private View podcastAction(String symbol,String label,boolean selected,Runnable action) {
     LinearLayout control=row();control.setGravity(Gravity.CENTER);control.setPadding(dp(6),0,dp(6),0);
-    control.setBackground(ripple(selected?palette.raised():palette.surface(),UiStyle.RADIUS_PILL));
+    control.setBackground(ripple(selected?palette.accentContainer():palette.surface(),UiStyle.RADIUS_PILL));
     if(symbol!=null){AppIcon image=new AppIcon(this,symbol,selected?accent:INK,"");image.setFocusable(false);
       image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);image.setMinimumWidth(0);image.setMinimumHeight(0);
       control.addView(image,new LinearLayout.LayoutParams(dp(24),dp(32)));}
@@ -2903,7 +2903,7 @@ public final class MainActivity extends Activity {
     hex.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int d){}public void afterTextChanged(android.text.Editable e){}public void onTextChanged(CharSequence value,int a,int b,int c){if(updating[0])return;String colour=value.toString();if(colour.matches("#[0-9a-fA-F]{6}")){selected[0]=Color.parseColor(colour);float[] pick=new float[3];Color.colorToHSV(selected[0],pick);hue.setProgress((int)pick[0]);saturation.setProgress((int)(pick[1]*100));updatePreview.run();}}});
     updatePreview.run();ScrollView scroll=new ScrollView(this);scroll.addView(box);
     AlertDialog dialog=new CadenceDialogBuilder(this).setTitle("Colour scheme").setView(scroll).setNegativeButton("Cancel",null)
-        .setNeutralButton("Reset to blue",(d,n)->{UiStyle.preferences(this).edit().remove("colour").apply();CadenceWidget.updateAll(this);recreate();})
+        .setNeutralButton("Reset to indigo",(d,n)->{UiStyle.preferences(this).edit().remove("colour").apply();CadenceWidget.updateAll(this);recreate();})
         .setPositiveButton("Apply",null).create();
     dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{if(!hex.getText().toString().matches("#[0-9a-fA-F]{6}")){hex.setError("Use #RRGGBB");return;}UiStyle.preferences(this).edit().putInt("colour",selected[0]).apply();CadenceWidget.updateAll(this);dialog.dismiss();recreate();}));dialog.show();
   }
@@ -2927,7 +2927,7 @@ public final class MainActivity extends Activity {
     android.widget.Switch autoplay = new android.widget.Switch(this);
     autoplay.setContentDescription("Autoplay related songs");
     autoplay.setThumbTintList(new ColorStateList(new int[][] {new int[] {android.R.attr.state_checked}, new int[] {}}, new int[] {accent, MUTED}));
-    autoplay.setTrackTintList(new ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{palette.outline(),palette.track()}));
+    autoplay.setTrackTintList(new ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{palette.accentContainer(),palette.track()}));
     autoplay.setChecked(Preferences.get(this).getBoolean("autoplay", true));
     autoplay.setOnCheckedChangeListener((v, checked) -> Preferences.get(this).edit().putBoolean("autoplay", checked).apply());
     auto.addView(autoplay, new LinearLayout.LayoutParams(dp(52), dp(48)));
@@ -2948,7 +2948,7 @@ public final class MainActivity extends Activity {
     LinearLayout personal = settingsGroup("Personalise");
     settingRow(personal,"palette","Theme",UiStyle.theme(this),this::chooseTheme);
     settingDivider(personal);
-    settingRow(personal,"palette","Colour scheme",UiStyle.preferences(this).contains("colour")?"Custom colour":"Action blue",this::chooseColour);
+    settingRow(personal,"palette","Colour scheme",UiStyle.preferences(this).contains("colour")?"Custom colour":"Indigo blue",this::chooseColour);
     settingDivider(personal);
     appearanceSwitch(personal,"Motion","Subtle screen transitions and loading animation","motion");
     settingDivider(personal);
@@ -3475,7 +3475,7 @@ public final class MainActivity extends Activity {
     LinearLayout item=settingRow(card,key.equals("motion")?"crossfade":"check",title,detail,null);
     android.widget.Switch toggle=new android.widget.Switch(this);toggle.setContentDescription(title);toggle.setChecked(UiStyle.preferences(this).getBoolean(key,true));
     toggle.setThumbTintList(new ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{accent,MUTED}));
-    toggle.setTrackTintList(new ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{palette.outline(),palette.track()}));
+    toggle.setTrackTintList(new ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{palette.accentContainer(),palette.track()}));
     toggle.setOnCheckedChangeListener((v,checked)->UiStyle.preferences(this).edit().putBoolean(key,checked).apply());item.addView(toggle,new LinearLayout.LayoutParams(dp(52),dp(48)));item.setBackground(ripple(Color.TRANSPARENT,16));item.setOnClickListener(v->toggle.setChecked(!toggle.isChecked()));
   }
 
@@ -3587,8 +3587,7 @@ public final class MainActivity extends Activity {
 
   private android.widget.FrameLayout iconTile(String symbol,String label) {
     android.widget.FrameLayout tile=new android.widget.FrameLayout(this);
-    int tint=androidx.core.graphics.ColorUtils.setAlphaComponent(accent,palette.light()?24:38);
-    tile.setBackground(round(tint,UiStyle.RADIUS_MEDIUM));
+    tile.setBackground(round(palette.accentContainer(),UiStyle.RADIUS_MEDIUM));
     AppIcon image=new AppIcon(this,symbol,accent,label);image.setFocusable(false);
     image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
     image.setMinimumWidth(0);image.setMinimumHeight(0);
