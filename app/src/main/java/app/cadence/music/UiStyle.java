@@ -21,6 +21,7 @@ final class UiStyle {
   static final int BODY_LARGE = BODY, HEADING = TITLE_LARGE;
   static final int RADIUS_SMALL = 8, RADIUS_MEDIUM = 11, RADIUS_ARTWORK = 14,
       RADIUS_CARD = 18, RADIUS_SHEET = 24, RADIUS_PILL = 1000;
+  static final int HAIRLINE = 1, MINI_PLAYER_HEIGHT = 64;
   static final int MOTION_FAST = 120, MOTION_STANDARD = 220;
   static final int DOWNLOAD_GREEN = 0xff248a55;
   static final int DESTRUCTIVE = 0xffff3b30;
@@ -126,6 +127,14 @@ final class UiStyle {
 
   static int bottomBarHeight(float fontScale) {
     return Math.max(64, Math.round(40 + 20 * fontScale));
+  }
+
+  static int miniPlayerHeight(float fontScale) {
+    return Math.max(MINI_PLAYER_HEIGHT, Math.round(14 + 29 * fontScale));
+  }
+
+  static int bottomContentPadding(float fontScale) {
+    return miniPlayerHeight(fontScale) + bottomBarHeight(fontScale);
   }
 
   static int libraryColumns(int widthDp, float fontScale) {

@@ -40,9 +40,13 @@ public class RequestedChangesIntegrationTest {
     });
     screenshot("search-back");
   }
-  @Test public void homeChipsStayOnHomeAndProfileTabPrecedesBrand()throws Exception {
+  @Test public void homeHasNoSearchAndKeepsContentClearOfPlaybackChrome()throws Exception {
     main(()->{
-      View root=activity.getWindow().getDecorView();text(root,"Podcasts").performClick();
+      View root=activity.getWindow().getDecorView();assertNull(edit(root));
+      LinearLayout homeBody=(LinearLayout)field("body");float scale=context.getResources().getConfiguration().fontScale;
+      assertEquals(UiStyle.dp(context,UiStyle.bottomContentPadding(scale)),homeBody.getPaddingBottom());
+      assertEquals(1,UiStyle.HAIRLINE);assertTrue(UiStyle.bottomContentPadding(2f)>=144);
+      text(root,"Podcasts").performClick();
       assertEquals("Home",field("page"));assertEquals("Podcasts",field("homeTab"));
       text(activity.getWindow().getDecorView(),"Music").performClick();assertEquals("Home",field("page"));assertEquals("Music",field("homeTab"));
       text(activity.getWindow().getDecorView(),"All").performClick();assertEquals("All",field("homeTab"));

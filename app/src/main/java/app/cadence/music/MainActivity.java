@@ -364,7 +364,8 @@ public final class MainActivity extends Activity {
     scroll.setFillViewport(true);
     scroll.setClipToPadding(false);
     body = column();
-    body.setPadding(dp(UiStyle.SCREEN_INSET), dp(UiStyle.SPACE_4), dp(UiStyle.SCREEN_INSET), dp(80));
+    body.setPadding(dp(UiStyle.SCREEN_INSET), dp(UiStyle.SPACE_4), dp(UiStyle.SCREEN_INSET),
+        dp(UiStyle.bottomContentPadding(getResources().getConfiguration().fontScale)));
     scroll.setVerticalScrollBarEnabled(false);
     scroll.addView(body);
     root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -399,7 +400,7 @@ public final class MainActivity extends Activity {
     root.addView(mini,new LinearLayout.LayoutParams(-1,-2));mini.setVisibility(View.GONE);
     LinearLayout navigationShell=column();navigationShell.setBackgroundColor(translucentSurface);
     View navigationDivider=new View(this);navigationDivider.setBackgroundColor(palette.divider());
-    navigationShell.addView(navigationDivider,new LinearLayout.LayoutParams(-1,dp(1)));
+    navigationShell.addView(navigationDivider,new LinearLayout.LayoutParams(-1,dp(UiStyle.HAIRLINE)));
     navigation = row();
     navigation.setPadding(dp(UiStyle.SPACE_1), dp(UiStyle.SPACE_1), dp(UiStyle.SPACE_1), dp(UiStyle.SPACE_1));
     navIcons.clear();
@@ -494,7 +495,6 @@ public final class MainActivity extends Activity {
     clear("Home", "");
     largeTitle(greeting(), "Pick up where you left off.");
     continueListeningCard();
-    searchBox("Search music", "", false);
     gap(14);
     android.widget.HorizontalScrollView homeFilters=new android.widget.HorizontalScrollView(this);
     LinearLayout filters = row();
@@ -1111,7 +1111,7 @@ public final class MainActivity extends Activity {
     if(libraryGrid!=null){card.setBackground(ripple(CARD,UiStyle.RADIUS_CARD));android.widget.GridLayout.LayoutParams size=new android.widget.GridLayout.LayoutParams();size.width=0;size.columnSpec=android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED,1f);size.setMargins(dp(4),dp(4),dp(4),dp(8));libraryGrid.addView(card,size);}
     else {
       if(libraryList==null){libraryList=column();libraryList.setBackground(round(CARD,UiStyle.RADIUS_CARD));body.addView(libraryList,new LinearLayout.LayoutParams(-1,-2));}
-      if(libraryList.getChildCount()>0){View divider=new View(this);divider.setBackgroundColor(palette.divider());LinearLayout.LayoutParams line=new LinearLayout.LayoutParams(-1,dp(1));line.setMargins(dp(80),0,dp(12),0);libraryList.addView(divider,line);}
+      if(libraryList.getChildCount()>0){View divider=new View(this);divider.setBackgroundColor(palette.divider());LinearLayout.LayoutParams line=new LinearLayout.LayoutParams(-1,dp(UiStyle.HAIRLINE));line.setMargins(dp(80),0,dp(12),0);libraryList.addView(divider,line);}
       libraryList.addView(card,new LinearLayout.LayoutParams(-1,-2));
     }
   }
@@ -2142,7 +2142,7 @@ public final class MainActivity extends Activity {
     AppIcon arrow=new AppIcon(this,"chevron",MUTED,"Open "+show.title);arrow.setFocusable(false);card.addView(arrow,new LinearLayout.LayoutParams(dp(32),dp(48)));
     card.setFocusable(true);card.setOnClickListener(v->action.run());
     target.addView(card,new LinearLayout.LayoutParams(-1,-2));View divider=new View(this);divider.setBackgroundColor(palette.divider());
-    LinearLayout.LayoutParams line=new LinearLayout.LayoutParams(-1,dp(1));line.setMargins(dp(80),0,0,0);target.addView(divider,line);
+    LinearLayout.LayoutParams line=new LinearLayout.LayoutParams(-1,dp(UiStyle.HAIRLINE));line.setMargins(dp(80),0,0,0);target.addView(divider,line);
   }
 
   private void findPodcasts(String term, boolean fromSpotify) {
@@ -2434,7 +2434,7 @@ public final class MainActivity extends Activity {
     body.addView(box); refreshEpisodeControls();updateEpisodeDownloadBadge(e.id,download);
     View line = new View(this);
     line.setBackgroundColor(palette.divider());
-    body.addView(line, new LinearLayout.LayoutParams(-1, dp(1)));
+    body.addView(line, new LinearLayout.LayoutParams(-1, dp(UiStyle.HAIRLINE)));
   }
 
   private void choosePodcastResume() {
@@ -3006,7 +3006,7 @@ public final class MainActivity extends Activity {
 
   private void settingDivider(LinearLayout card) {
     View line = new View(this); line.setBackgroundColor(palette.divider());
-    LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(-1, dp(1));
+    LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(-1, dp(UiStyle.HAIRLINE));
     size.setMargins(dp(60), 0, dp(16), 0); card.addView(line, size);
   }
 
