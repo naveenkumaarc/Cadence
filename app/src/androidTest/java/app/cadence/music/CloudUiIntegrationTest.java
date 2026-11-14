@@ -4,6 +4,7 @@ import static org.junit.Assert.*;
 import android.content.*;
 import android.os.Bundle;
 import android.view.*;
+import android.widget.Button;
 import android.widget.TextView;
 import androidx.media3.common.*;
 import androidx.media3.session.MediaController;
@@ -29,10 +30,11 @@ public final class CloudUiIntegrationTest {
     if(view instanceof TextView label && text.contentEquals(label.getText())) return true;
     if(view instanceof ViewGroup group) for(int i=0;i<group.getChildCount();i++) if(text(group.getChildAt(i),text)) return true;return false;
   }
+  private int downloads(View view){int count=view instanceof DownloadBadge?1:0;if(view instanceof ViewGroup group)for(int i=0;i<group.getChildCount();i++)count+=downloads(group.getChildAt(i));return count;}
   private void until(Callable<Boolean> check) throws Exception {
     for(int i=0;i<300;i++) { boolean[] ready={false};main(()->ready[0]=check.call());if(ready[0])return;Thread.sleep(50); }fail("Native UI did not reach the requested playback state");
   }
-  @Test public void episodeRowsShowIndividualProgressAndRoundControlTogglesRealPlayback() throws Exception {
+  @Test public void episodeRowsUseOneDownloadControlAndPlayPillTogglesPlayback() throws Exception {
     Context context=instrumentation.getTargetContext();
     if(android.os.Build.VERSION.SDK_INT>=33) instrumentation.getUiAutomation().grantRuntimePermission(context.getPackageName(),android.Manifest.permission.POST_NOTIFICATIONS);
     MainActivity activity=(MainActivity)instrumentation.startActivitySync(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
@@ -49,8 +51,8 @@ public final class CloudUiIntegrationTest {
         PodcastStore.get(context).progress("ui-episode-3",1200000,false);PodcastStore.get(context).progress("ui-episode-4",2700000,false);
         Method render=MainActivity.class.getDeclaredMethod("showPodcast",Podcasts.Show.class);render.setAccessible(true);render.invoke(activity,show);
         View root=activity.getWindow().getDecorView();
-        assertTrue(text(root,"20 min played · 40 min remaining"));assertTrue(text(root,"45 min played · 15 min remaining"));
-        View play=described(root,"Resume Episode 3");assertTrue(play instanceof TransportButton);assertEquals(play.getLayoutParams().width,play.getLayoutParams().height);
+        assertTrue(text(root,"Resume - 40 min left"));assertTrue(text(root,"Resume - 15 min left"));assertEquals(2,downloads(root));
+        View play=described(root,"Resume Episode 3");assertTrue(play instanceof Button);assertTrue(play.getLayoutParams().width!=play.getLayoutParams().height);
         PodcastStore.get(context).progress("ui-episode-3",500,false);
         play.performClick();
         Field dialog=MainActivity.class.getDeclaredField("playerDialog");dialog.setAccessible(true);

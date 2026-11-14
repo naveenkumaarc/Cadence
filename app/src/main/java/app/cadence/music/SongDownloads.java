@@ -80,9 +80,9 @@ final class SongDownloads {
     if (entry == null) return state;
     File target = file(entry);
     if (entry.complete) {
-      if (target != null && target.isFile() && target.length() > 16) {
+      if (validAudio(target)) {
         state.complete = true; state.label = "Downloaded"; state.uri = Uri.fromFile(target).toString();
-      } else state.label = "Download again";
+      } else state.label = "Download missing · Retry";
       return state;
     }
     if(entry.job==0) {

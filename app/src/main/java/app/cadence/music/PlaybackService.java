@@ -118,6 +118,10 @@ public final class PlaybackService extends MediaLibraryService {
                 String local = SongDownloads.get(this).localUri(url);
                 if (local != null) return spec.withUri(android.net.Uri.parse(local));
               } catch (Exception unavailable) { /* Keep the original source available. */ }
+              try {
+                String local = podcasts==null?null:podcasts.localUri(url);
+                if(local!=null)return spec.withUri(android.net.Uri.parse(local));
+              } catch(Exception unavailable) { /* A missing episode falls back to its stream. */ }
               if (!url.startsWith("https://www.youtube.com/watch?v=")) return spec;
               String key = Links.youtubeVideo(url);
               Cached cached = urls.get(key);
@@ -862,7 +866,7 @@ public final class PlaybackService extends MediaLibraryService {
       int restoredIndex=0; boolean restoredCurrent=false;
       for (int i = 0; i < list.length(); i++) {
         org.json.JSONObject j = list.getJSONObject(i);
-        app.cadence.core.Track t = Library.decode(j);
+        app.cadence.core.Track t = Library.decode(j);if(podcasts!=null)t=podcasts.stable(t);
         android.os.Bundle extras = new android.os.Bundle();
         extras.putString("track", j.toString());
         extras.putBoolean("manualQueue", j.optBoolean("manualQueue"));

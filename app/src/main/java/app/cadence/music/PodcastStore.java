@@ -232,18 +232,25 @@ final class PodcastStore {
 
   static final class Download {
     String label = "Download episode", uri = "";
-    boolean active = false, complete = false;
+    boolean active = false, complete = false, failed = false;
     int percent = -1;
   }
 
   synchronized Download download(String id) {
     Download state = new Download();
     Long job = jobs.get(id);
-    if (job == null) return state;
+    if (job == null) {
+      try {File file=downloadFile(id);if(validAudio(file)){state.complete=true;state.uri=Uri.fromFile(file).toString();state.label="Downloaded";}
+        else if(file.isFile()){state.failed=true;state.label="Download missing · Retry";}}
+      catch(Exception ignored){}
+      return state;
+    }
     DownloadManager dm = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
     try (Cursor cursor = dm.query(new DownloadManager.Query().setFilterById(job))) {
       if (cursor == null || !cursor.moveToFirst()) {
-        state.label = "Download again";
+        try {File file=downloadFile(id);if(validAudio(file)){state.complete=true;state.uri=Uri.fromFile(file).toString();state.label="Downloaded";return state;}}
+        catch(Exception ignored){}
+        state.label = "Download missing · Retry";state.failed=true;
         return state;
       }
       int status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
@@ -256,8 +263,8 @@ final class PodcastStore {
           state.complete = true;
           state.uri = uri;
           state.label = "Downloaded";
-        } else state.label = "Download failed · Retry";
-      } else if (status == DownloadManager.STATUS_FAILED) state.label = "Download failed · Retry";
+        } else {state.label = "Download missing · Retry";state.failed=true;}
+      } else if (status == DownloadManager.STATUS_FAILED) {state.label = "Download failed · Retry";state.failed=true;}
       else {
         state.active = true;
         long
@@ -274,7 +281,7 @@ final class PodcastStore {
                 : state.percent >= 0 ? "Downloading · " + state.percent + "%" : "Downloading…";
       }
     } catch (Exception e) {
-      state.label = "Download unavailable · Retry";
+      state.label = "Download unavailable · Retry";state.failed=true;
     }
     return state;
   }
@@ -284,6 +291,11 @@ final class PodcastStore {
     for (byte x : MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8)))
       b.append(String.format(java.util.Locale.ROOT, "%02x", x & 255));
     return b.toString();
+  }
+
+  private File downloadFile(String id) throws Exception {
+    File directory=context.getExternalFilesDir(Environment.DIRECTORY_PODCASTS);
+    return directory==null?new File(context.getFilesDir(),"unavailable"):new File(directory,hash(id)+".audio");
   }
 
   private boolean validAudio(File f) {
@@ -352,13 +364,24 @@ final class PodcastStore {
     Long job = jobs.remove(episode);
     if (job != null)
       ((DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE)).remove(job);
+    File file=downloadFile(episode);if(file.exists()&&!file.delete())throw new IOException("Cannot remove this episode download.");
     save();
   }
 
   synchronized Track playable(Podcasts.Episode e) {
-    Track t = e.track();
-    Download d = download(e.id);
-    if (d.complete) t.sourceUrl = d.uri;
-    return t;
+    return e.track();
+  }
+
+  synchronized String localUri(String stream) {
+    for(Podcasts.Show show:knownShows())for(Podcasts.Episode episode:show.episodes)
+      if(episode.audioUrl.equals(stream)) {Download state=download(episode.id);return state.complete?state.uri:null;}
+    return null;
+  }
+
+  synchronized Track stable(Track track) {
+    if(track==null||!track.podcast||track.sourceUrl.startsWith("https://"))return track;
+    for(Podcasts.Show show:knownShows())for(Podcasts.Episode episode:show.episodes)
+      if(episode.id.equals(track.episodeId))return episode.track();
+    return track;
   }
 }

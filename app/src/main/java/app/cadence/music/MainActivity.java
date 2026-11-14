@@ -77,7 +77,7 @@ public final class MainActivity extends Activity {
   private ProgressBar syncSpinner;
   private Button syncNowButton;
   private Button playlistDownload;
-  private final java.util.Map<String, TransportButton> episodePlayButtons = new java.util.HashMap<>();
+  private final java.util.Map<String, Button> episodePlayButtons = new java.util.HashMap<>();
   private final java.util.Map<String, TextView> episodeProgress = new java.util.HashMap<>();
   private final java.util.Map<String, ProgressBar> episodeBars = new java.util.HashMap<>();
   private final java.util.Map<String, Podcasts.Episode> displayedEpisodes = new java.util.HashMap<>();
@@ -2272,7 +2272,7 @@ public final class MainActivity extends Activity {
         });
   }
 
-  private final java.util.Map<String, Button> downloadButtons = new java.util.HashMap<>();
+  private final java.util.Map<String, DownloadBadge> downloadButtons = new java.util.HashMap<>();
 
   private void showPodcast(Podcasts.Show show) {
     if(!page.equals("Show"))rememberScreen();
@@ -2291,27 +2291,14 @@ public final class MainActivity extends Activity {
     body.addView(text(show.author, 14, MUTED, false));
     gap(16);
     LinearLayout actions = row();
-    actions.addView(
-        button(
-            "Refresh",
-            false,
-            () ->
-                work(
-                    "Refreshing episodes…",
-                    () -> Podcasts.feed(show.feedUrl),
-                    fresh -> {
-                      try {
-                        if (podcasts.subscribed(show.feedUrl)) podcasts.put(fresh); else podcasts.preview(fresh);
-                        showPodcast(fresh);
-                      } catch (Exception e) {
-                        error("Saving podcast", e);
-                      }
-                    })),
-        new LinearLayout.LayoutParams(0, dp(48), 1));
-    actions.addView(
-        button("Speed", false, this::chooseSpeed), new LinearLayout.LayoutParams(0, dp(48), 1));
+    actions.addView(podcastAction("refresh","Refresh",false,() -> work(
+        "Refreshing episodes…",() -> Podcasts.feed(show.feedUrl),fresh -> {
+          try {if (podcasts.subscribed(show.feedUrl)) podcasts.put(fresh); else podcasts.preview(fresh);showPodcast(fresh);}
+          catch (Exception e) {error("Saving podcast", e);}
+        })),new LinearLayout.LayoutParams(0,dp(48),1));
+    actions.addView(podcastAction(null,"Speed",false,this::chooseSpeed),new LinearLayout.LayoutParams(0,dp(48),1));
     boolean subscribed = podcasts.subscribed(show.feedUrl);
-    actions.addView(button(subscribed ? "Subscribed ✓" : "Subscribe", !subscribed, () -> {
+    actions.addView(podcastAction(subscribed?"check":null,subscribed?"Subscribed":"Subscribe",subscribed,() -> {
       try {
         if (podcasts.subscribed(show.feedUrl)) {
           new CadenceDialogBuilder(this).setTitle("Unsubscribe?")
@@ -2329,6 +2316,18 @@ public final class MainActivity extends Activity {
     appendEpisodes(show, 0);
     if (show.episodes.isEmpty())
       body.addView(text("This feed has no public audio episodes.", 14, MUTED, false));
+  }
+
+  private View podcastAction(String symbol,String label,boolean selected,Runnable action) {
+    LinearLayout control=row();control.setGravity(Gravity.CENTER);control.setPadding(dp(6),0,dp(6),0);
+    control.setBackground(ripple(selected?palette.raised():palette.surface(),UiStyle.RADIUS_PILL));
+    if(symbol!=null){AppIcon image=new AppIcon(this,symbol,selected?accent:INK,"");image.setFocusable(false);
+      image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);image.setMinimumWidth(0);image.setMinimumHeight(0);
+      control.addView(image,new LinearLayout.LayoutParams(dp(24),dp(32)));}
+    TextView text=text(label,UiStyle.FOOTNOTE,selected?accent:INK,true);text.setSingleLine(true);
+    text.setEllipsize(android.text.TextUtils.TruncateAt.END);text.setGravity(Gravity.CENTER);text.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+    control.addView(text,new LinearLayout.LayoutParams(-2,-2));control.setContentDescription(label);control.setFocusable(true);
+    control.setOnClickListener(v->UiStyle.press(v,action));return control;
   }
 
   private void appendEpisodes(Podcasts.Show show, int offset) {
@@ -2380,14 +2379,8 @@ public final class MainActivity extends Activity {
     top.setOnClickListener(v -> playEpisode(e));
     box.addView(top);
     displayedEpisodes.put(e.id,e);
-    TextView meta = text("",12,accent,false); meta.setPadding(0,dp(10),0,0);
-    episodeProgress.put(e.id,meta); box.addView(meta);
-    ProgressBar bar = new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
-    bar.setMax(1000); bar.setProgressTintList(ColorStateList.valueOf(accent));
-    LinearLayout.LayoutParams barSize = new LinearLayout.LayoutParams(-1,dp(4)); barSize.setMargins(0,dp(10),0,dp(4));
-    box.addView(bar,barSize); episodeBars.put(e.id,bar);
     LinearLayout controls=row(); controls.setPadding(0,dp(12),0,dp(4));
-    TransportButton episodePlay=new TransportButton(this,TransportButton.Icon.PLAY,BG,accent,"Play "+e.title);
+    Button episodePlay=button("Play",true,()->{});
     episodePlay.setOnClickListener(v -> {
       Track active=currentTrack();
       if(active!=null && active.podcast && active.episodeId.equals(e.id)) {
@@ -2398,13 +2391,11 @@ public final class MainActivity extends Activity {
       refreshEpisodeControls();
     });
     episodePlayButtons.put(e.id,episodePlay);
-    LinearLayout.LayoutParams playSize=new LinearLayout.LayoutParams(dp(48),dp(48));playSize.setMargins(0,0,dp(12),0);
+    LinearLayout.LayoutParams playSize=new LinearLayout.LayoutParams(0,dp(44),1);playSize.setMargins(0,0,dp(8),0);
     controls.addView(episodePlay,playSize);
-    Button download = button(podcasts.download(e.id).label, false, () -> downloadAction(e));
-    download.setTextSize(12);
+    DownloadBadge download=new DownloadBadge(this);download.setOnClickListener(v->downloadAction(e));
     downloadButtons.put(e.id, download);
-    controls.addView(download, new LinearLayout.LayoutParams(0, dp(44), 1));
-    controls.addView(icon("restore","Choose listening position for "+e.title,()->chooseEpisodePosition(e)),new LinearLayout.LayoutParams(dp(44),dp(48)));
+    controls.addView(download,new LinearLayout.LayoutParams(dp(48),dp(48)));
     controls.addView(
         icon(
             "more",
@@ -2416,24 +2407,29 @@ public final class MainActivity extends Activity {
                         new String[] {
                           "Play next",
                           "Add to queue",
-                          podcasts.completed(e.id) ? "Mark unplayed" : "Mark played",
-                          "Download options"
+                          "Choose listening position",
+                          podcasts.completed(e.id) ? "Mark unplayed" : "Mark played"
                         },
                         (d, n) -> {
                           if (n == 0) enqueue(podcasts.playable(e), true, null);
                           else if (n == 1) enqueue(podcasts.playable(e), false, null);
-                          else if (n == 2) {
+                          else if(n==2)chooseEpisodePosition(e);
+                          else {
                             podcasts.progress(e.id, 0, !podcasts.completed(e.id));
                             if (shownShow != null && page.equals("Show")) showPodcast(shownShow);
                             else showPodcasts();
-                          } else downloadAction(e);
+                          }
                         })
                     .show()),
         new LinearLayout.LayoutParams(dp(44), dp(48)));
     box.addView(controls);
-    body.addView(box); refreshEpisodeControls();
+    ProgressBar bar = new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
+    bar.setMax(1000); bar.setProgressTintList(ColorStateList.valueOf(accent));bar.setProgressBackgroundTintList(ColorStateList.valueOf(palette.track()));
+    LinearLayout.LayoutParams barSize = new LinearLayout.LayoutParams(-1,dp(2)); barSize.setMargins(0,dp(8),0,0);
+    box.addView(bar,barSize); episodeBars.put(e.id,bar);
+    body.addView(box); refreshEpisodeControls();updateEpisodeDownloadBadge(e.id,download);
     View line = new View(this);
-    line.setBackgroundColor(CARD);
+    line.setBackgroundColor(palette.divider());
     body.addView(line, new LinearLayout.LayoutParams(-1, dp(1)));
   }
 
@@ -2475,26 +2471,13 @@ public final class MainActivity extends Activity {
   private void downloadAction(Podcasts.Episode e) {
     PodcastStore.Download d = podcasts.download(e.id);
     if (d.complete || d.active) {
-      new CadenceDialogBuilder(this)
-          .setTitle(d.complete ? "Episode downloaded" : "Episode downloading")
-          .setItems(
-              new String[] {
-                d.complete ? "Play offline" : "Keep downloading",
-                d.complete ? "Remove download" : "Cancel download"
-              },
-              (dialog, n) -> {
-                if (n == 0) {
-                  if (d.complete) playEpisode(e);
-                } else
-                  try {
-                    podcasts.deleteDownload(e.id);
-                    DownloadList.forget(this,e.track());
-                    refreshDownloadButtons();
-                  } catch (Exception failure) {
-                    error("Removing download", failure);
-                  }
-              })
-          .show();
+      new CadenceDialogBuilder(this).setTitle(d.complete?"Remove download?":"Cancel download?")
+          .setMessage(d.complete?"This episode will use streaming next time.":"The partial episode download will be removed.")
+          .setNegativeButton(d.complete?"Keep download":"Keep downloading",null)
+          .setPositiveButton(d.complete?"Remove download":"Cancel download",(dialog,n)-> {
+            try {podcasts.deleteDownload(e.id);DownloadList.forget(this,e.track());refreshDownloadButtons();}
+            catch(Exception failure){error("Removing download",failure);}
+          }).show();
     } else
       try {
         podcasts.startDownload(e);
@@ -2508,9 +2491,15 @@ public final class MainActivity extends Activity {
 
   private void refreshDownloadButtons() {
     if (podcasts == null) return;
-    for (var kv : downloadButtons.entrySet())
-      kv.getValue().setText(podcasts.download(kv.getKey()).label);
+    for (var kv : downloadButtons.entrySet())updateEpisodeDownloadBadge(kv.getKey(),kv.getValue());
     refreshSongDownloads(); refreshPlaylistDownload();refreshDownloadQueue();
+  }
+
+  private void updateEpisodeDownloadBadge(String id,DownloadBadge badge) {
+    PodcastStore.Download state=podcasts.download(id);badge.state(state.complete,state.active,state.failed,state.percent);
+    Podcasts.Episode episode=displayedEpisodes.get(id);String title=episode==null?"episode":episode.title;
+    badge.setContentDescription(state.complete?"Remove download for "+title:state.active?"Cancel download for "+title:
+        state.failed?"Retry download for "+title:"Download "+title);
   }
 
   private void updateSongBadge(DownloadBadge badge, Track track) {
@@ -3189,12 +3178,13 @@ public final class MainActivity extends Activity {
       if(label!=null) { label.setText(done && !current?"Played":episodeProgressLabel(position,length));
         label.setContentDescription(label.getText()+" · "+(PodcastPositions.thisDeviceMode(this)?"This device":"Latest activity")); }
       ProgressBar bar=episodeBars.get(id);
-      if(bar!=null) { bar.setVisibility(length>0?View.VISIBLE:View.GONE); bar.setProgress(done && !current?1000:(int)Math.min(1000,position/Math.max(1,length))); }
-      TransportButton button=episodePlayButtons.get(id);
+      if(bar!=null) { bar.setVisibility(position>0&&!done?View.VISIBLE:View.GONE); bar.setProgress((int)Math.min(1000,position/Math.max(1,length))); }
+      Button button=episodePlayButtons.get(id);
       if(button!=null) {
         boolean playing=current && controller!=null && controller.getPlayWhenReady() && controller.getPlaybackState()!=Player.STATE_ENDED && controller.getPlayerError()==null;
-        button.icon(playing?TransportButton.Icon.PAUSE:TransportButton.Icon.PLAY);
-        button.setContentDescription((playing?"Pause ":position>0?"Resume ":"Play ")+episode.title);
+        String action=playing?"Pause":position>0?"Resume":"Play",remaining="";
+        if(length>0){long seconds=Math.max(0,length-position/1000);remaining=" - "+Math.max(1,(long)Math.ceil(seconds/60d))+" min left";}
+        button.setText(action+remaining);button.setContentDescription(action+" "+episode.title);
       }
     }
   }
@@ -3425,7 +3415,7 @@ public final class MainActivity extends Activity {
       org.json.JSONObject saved=JsonDisk.read(this,"cloud-resume.json"); org.json.JSONArray items=saved.optJSONArray("items");
       if(items==null || items.length()==0) { toast("Sync first to retrieve your saved queue."); return; }
       List<MediaItem> queue=new ArrayList<>(); int start=0;
-      for(int i=0;i<items.length();i++) { Track track=Library.decode(items.getJSONObject(i)); if(track.sourceUrl.startsWith("https://")) { if(i<=saved.optInt("index")) start=queue.size(); queue.add(mediaItem(track)); } }
+      for(int i=0;i<items.length();i++) { Track track=podcasts.stable(Library.decode(items.getJSONObject(i))); if(queuePlayable(track)) { if(i<=saved.optInt("index")) start=queue.size(); queue.add(mediaItem(track)); } }
       if(queue.isEmpty()) { toast("This queue has no available online tracks."); return; }
       controller.setMediaItems(queue,Math.min(start,queue.size()-1),Math.max(0,saved.optLong("position")));
       controller.setShuffleModeEnabled(saved.optBoolean("shuffle")); int repeat=saved.optInt("repeat");
