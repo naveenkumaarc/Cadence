@@ -1520,6 +1520,7 @@ public final class MainActivity extends Activity {
           return true;
         });
     body.addView(row);
+    View divider=new View(this);divider.setBackgroundColor(palette.divider());LinearLayout.LayoutParams dividerSize=new LinearLayout.LayoutParams(-1,dp(UiStyle.HAIRLINE));dividerSize.setMargins(dp(68),0,0,0);body.addView(divider,dividerSize);
   }
 
   private void trackOptions(Track track, Library.Playlist playlist) {
