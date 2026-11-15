@@ -156,6 +156,7 @@ public final class MainActivity extends Activity {
   private boolean searchLoading;
   private String searchError = "";
   private LinearLayout searchResultsBody;
+  private EditText searchQueryView;
   private Artwork playerArt;
   private SeekBar playerSeek;
   private boolean playerSeeking;
@@ -341,9 +342,11 @@ public final class MainActivity extends Activity {
     root.setOnApplyWindowInsetsListener(
         (v, insets) -> {
           if (Build.VERSION.SDK_INT >= 30) {
-            android.graphics.Insets bars =
-                insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.ime());
+            android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
             v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            boolean keyboard=insets.isVisible(WindowInsets.Type.ime());
+            if(mini!=null)mini.setVisibility(keyboard?View.GONE:(controller!=null&&controller.getCurrentMediaItem()!=null?View.VISIBLE:View.GONE));
+            if(navigationShell!=null)navigationShell.setVisibility(keyboard?View.GONE:View.VISIBLE);
           } else
             v.setPadding(
                 insets.getSystemWindowInsetLeft(),
@@ -365,6 +368,12 @@ public final class MainActivity extends Activity {
     body.setPadding(dp(UiStyle.SCREEN_INSET), dp(UiStyle.SPACE_4), dp(UiStyle.SCREEN_INSET),
         dp(UiStyle.bottomContentPadding(getResources().getConfiguration().fontScale)));
     scroll.setVerticalScrollBarEnabled(false);
+    final float[] searchDrag={0};
+    scroll.setOnTouchListener((view,event)->{if(page.equals("Search")){
+      if(event.getActionMasked()==android.view.MotionEvent.ACTION_DOWN)searchDrag[0]=event.getY();
+      else if(event.getActionMasked()==android.view.MotionEvent.ACTION_MOVE&&Math.abs(event.getY()-searchDrag[0])>dp(12))
+        ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(view.getWindowToken(),0);
+    }return false;});
     scroll.addView(body);
     root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
     status = text("", 12, MUTED, false);
@@ -654,9 +663,10 @@ public final class MainActivity extends Activity {
     query.setBackgroundColor(Color.TRANSPARENT);
     query.setPadding(0, 0, dp(4), 0);
     query.setTextSize(15);
-    query.setSingleLine(true); query.setSelectAllOnFocus(true);
+    query.setSingleLine(true); query.setSelectAllOnFocus(false);
     query.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
     query.setContentDescription("Search music and podcasts");
+    if(searchPage)searchQueryView=query;
     search.addView(query, new LinearLayout.LayoutParams(0, dp(UiStyle.TOUCH), 1));
     AppIcon clearQuery=icon("close","Clear search",()->{query.setText("");query.requestFocus();});
     clearQuery.setVisibility(initial.isEmpty()?View.GONE:View.VISIBLE);
@@ -1114,6 +1124,9 @@ public final class MainActivity extends Activity {
   }
 
   private void showSearch() {
+    if(page.equals("Search")&&searchQueryView!=null&&searchQueryView.isAttachedToWindow()){
+      renderSearchResults();return;
+    }
     clear("Search", "");
     largeTitle("Search", "Find music, artists, playlists and podcasts.");
     searchBox("Search", searchText, true);
@@ -1128,13 +1141,19 @@ public final class MainActivity extends Activity {
       }));
     sc.addView(filters);addBleedingHorizontal(sc,UiStyle.SPACE_2);gap(8);
     searchResultsBody = column(); body.addView(searchResultsBody);
+    renderSearchResults();
+  }
+
+  private void renderSearchResults() {
+    if(searchResultsBody==null)return;
+    searchResultsBody.removeAllViews();
     LinearLayout outer = body; body = searchResultsBody;
     try {
       if (searchText.isBlank()) { renderRecents(body); return; }
       if(rankedSearch.isEmpty()&&(!catalogResults.isEmpty()||!podcastResults.isEmpty()))
         rankedSearch=rankSearch(SearchRanker.parse(searchText),catalogResults,podcastResults,searchSignals(),searchFilter.equals("All"));
       if (searchLoading&&rankedSearch.isEmpty()) { body.addView(new SkeletonView(this,false)); return; }
-      if(searchLoading){TextView progress=text("Searching…",UiStyle.FOOTNOTE,MUTED,false);progress.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);body.addView(progress);gap(8);}
+      if(searchLoading){body.addView(new SkeletonView(this,false));gap(8);}
       if (!searchError.isEmpty()) {
         body.addView(text(searchError,14,MUTED,false));
         body.addView(button("Retry search",false,this::searchMusic));gap(12);

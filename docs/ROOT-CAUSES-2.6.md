@@ -14,3 +14,15 @@ actions 48 dp minimum targets, and moves actions to additional rows before they 
 shared padded detail header now supplies centred artwork, title, byline and metadata for catalogue,
 playlist and podcast pages. Detail app bars own their back navigation and title, and the first track
 is separated from the actions by a 24 dp token spacer.
+
+## Task 2 — search keyboard focus
+
+`searchMusic()` and `applySearch()` both called `showSearch()`. That method removed every child from
+the screen body and created a new `EditText`, so each loading/result transition destroyed the IME's
+focus owner and its composing region. The root inset listener also combined system-bar and IME
+insets, deliberately lifting the mini player and navigation above the keyboard.
+
+Search now keeps one attached input while only its result container is replaced. Debounced work is
+still generation-checked and stale work is cancelled; loading uses skeleton rows without replacing
+the field. IME insets hide playback/navigation chrome, and a user drag dismisses the keyboard while
+result updates never do.
