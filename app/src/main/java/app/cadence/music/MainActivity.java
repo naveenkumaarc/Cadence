@@ -3452,19 +3452,23 @@ public final class MainActivity extends Activity {
     if(controller==null||controller.getCurrentMediaItem()==null){toast("Play something before opening the equalizer.");return;}
     var result=controller.sendCustomCommand(new androidx.media3.session.SessionCommand(PlaybackService.EQUALIZER,Bundle.EMPTY),Bundle.EMPTY);
     result.addListener(()->{
-      try{
-        androidx.media3.session.SessionResult response=result.get();
-        int session=response.extras.getInt("audioSession",0);
-        if(response.resultCode!=androidx.media3.session.SessionResult.RESULT_SUCCESS||session==0)throw new IllegalStateException();
-        Intent intent=new Intent(android.media.audiofx.AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL)
-            .putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION,session)
-            .putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME,getPackageName())
-            .putExtra(android.media.audiofx.AudioEffect.EXTRA_CONTENT_TYPE,android.media.audiofx.AudioEffect.CONTENT_TYPE_MUSIC);
-        startActivity(intent);
-      }catch(android.content.ActivityNotFoundException unavailable){toast("This device does not provide an equalizer panel.");}
-      catch(Exception unavailable){toast("Start playback, then try the equalizer again.");}
+      try{showEqualizerSheet(result.get().extras);}catch(Exception unavailable){toast("Start playback, then try the equalizer again.");}
     },this::runOnUiThread);
   }
+
+  private void showEqualizerSheet(Bundle state){
+    Dialog dialog=new Dialog(this,palette.light()?R.style.AppLightTheme:R.style.AppTheme);LinearLayout content=column();content.setPadding(dp(20),dp(16),dp(20),dp(24));content.setBackground(round(BG,UiStyle.RADIUS_SHEET));
+    LinearLayout title=row();title.addView(text("Equalizer",UiStyle.TITLE,INK,true),new LinearLayout.LayoutParams(0,-2,1));title.addView(icon("close","Close equalizer",dialog::dismiss),new LinearLayout.LayoutParams(dp(48),dp(48)));content.addView(title);
+    if(!state.getBoolean("supported")){content.addView(text("Not supported on this device",UiStyle.BODY,MUTED,false));}
+    else {android.widget.Switch enabled=new android.widget.Switch(this);enabled.setText("On");enabled.setTextColor(INK);enabled.setChecked(state.getBoolean("enabled"));enabled.setMinimumHeight(dp(48));enabled.setOnCheckedChangeListener((v,on)->equalizerCommand("enabled",-1,on?1:0));content.addView(enabled);
+      String[] presets=state.getStringArray("presets");if(presets!=null&&presets.length>0){android.widget.HorizontalScrollView scroll=new android.widget.HorizontalScrollView(this);LinearLayout chips=row();for(int i=0;i<presets.length;i++){int preset=i;chips.addView(chip(presets[i],i==state.getInt("preset"),()->equalizerCommand("preset",-1,preset)));}scroll.addView(chips);content.addView(scroll);}
+      short[] range=state.getShortArray("range"),levels=state.getShortArray("levels");int[] frequencies=state.getIntArray("frequencies");if(range!=null&&levels!=null){for(int i=0;i<levels.length;i++){int band=i;LinearLayout row=row();TextView label=text(frequencies[i]/1000+" Hz",UiStyle.FOOTNOTE,MUTED,false);row.addView(label,new LinearLayout.LayoutParams(dp(72),-2));SeekBar slider=new SeekBar(this);slider.setMax(range[1]-range[0]);slider.setProgress(levels[i]-range[0]);slider.setMinimumHeight(dp(48));slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}public void onProgressChanged(SeekBar b,int value,boolean user){if(user)equalizerCommand("band",band,value+range[0]);}});row.addView(slider,new LinearLayout.LayoutParams(0,dp(48),1));content.addView(row);}}
+      content.addView(button("Reset",false,()->equalizerCommand("reset",-1,0)));
+      int session=state.getInt("audioSession");Intent system=new Intent(android.media.audiofx.AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL).putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION,session).putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME,getPackageName()).putExtra(android.media.audiofx.AudioEffect.EXTRA_CONTENT_TYPE,android.media.audiofx.AudioEffect.CONTENT_TYPE_MUSIC);if(system.resolveActivity(getPackageManager())!=null)content.addView(button("Open system equalizer",false,()->startActivity(system)));
+    }
+    ScrollView scroll=new ScrollView(this);scroll.addView(content);dialog.setContentView(scroll);dialog.show();if(dialog.getWindow()!=null){dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);dialog.getWindow().setGravity(Gravity.BOTTOM);dialog.getWindow().setLayout(-1,Math.min(dp(680),getResources().getDisplayMetrics().heightPixels*4/5));}
+  }
+  private void equalizerCommand(String action,int band,int value){if(controller==null)return;Bundle args=new Bundle();args.putString("action",action);args.putInt("band",band);args.putInt("value",value);if(action.equals("enabled"))args.putBoolean("value",value==1);controller.sendCustomCommand(new androidx.media3.session.SessionCommand(PlaybackService.EQUALIZER,Bundle.EMPTY),args);}
 
   private <T> void work(String label, Callable<T> task, Consumer<T> done) {
     int ownerGeneration=searchGeneration;String ownerPage=page;

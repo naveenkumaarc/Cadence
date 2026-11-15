@@ -37,3 +37,14 @@ was not included in saved instance state.
 Library filter changes now flow through the single `libraryFilter` state and rebuild the chip row
 and content together. That value is saved/restored, horizontal page gestures update the same state,
 and the edge-to-edge scroll row automatically brings its selected chip fully into view.
+
+## Task 4 — equalizer
+
+The button requested the current Media3 audio-session ID and launched an optional OEM control-panel
+intent. Devices without a handler therefore showed only a toast, and Cadence never created or
+controlled an audio effect. The highlighted control did not correspond to any persistent DSP state.
+
+PlaybackService now owns an `android.media.audiofx.Equalizer`, attaches it whenever ExoPlayer reports
+a new audio-session ID, reapplies its app-wide DataStore profile, and releases it with the session.
+The Cadence sheet exposes enablement, device presets, every reported frequency band, reset, and a
+secondary system-panel action only when resolvable. Unsupported devices receive an explicit state.

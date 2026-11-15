@@ -30,6 +30,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class PlaybackService extends MediaLibraryService {
   private MediaLibrarySession session;
   private ExoPlayer player;
+  private android.media.audiofx.Equalizer equalizer;
+  private int equalizerSession=C.AUDIO_SESSION_ID_UNSET;
   private PodcastStore podcasts;
   private final java.util.concurrent.ExecutorService networkTasks = java.util.concurrent.Executors.newFixedThreadPool(2);
   private final java.util.concurrent.ExecutorService libraryTasks = java.util.concurrent.Executors.newSingleThreadExecutor();
@@ -314,9 +316,13 @@ public final class PlaybackService extends MediaLibraryService {
                         sleepEndOfTrack=args.getBoolean("endOfTrack",false);
                         if(crossfade!=null)crossfade.cancel();
                       } else if (command.customAction.equals(EQUALIZER)) {
-                        int audioSession=player.getAudioSessionId();
-                        if(audioSession==C.AUDIO_SESSION_ID_UNSET)throw new IllegalStateException("Audio session unavailable");
-                        android.os.Bundle result=new android.os.Bundle();result.putInt("audioSession",audioSession);
+                        String action=args.getString("action","query");
+                        if(action.equals("enabled")){EqualizerStore.Profile saved=EqualizerStore.read(PlaybackService.this);EqualizerStore.write(PlaybackService.this,new EqualizerStore.Profile(args.getBoolean("value"),saved.preset(),saved.levels()));attachEqualizer(player.getAudioSessionId());}
+                        else if(action.equals("preset")&&equalizer!=null){short preset=(short)args.getInt("value");equalizer.usePreset(preset);persistEqualizer(preset);}
+                        else if(action.equals("band")&&equalizer!=null){short band=(short)args.getInt("band");equalizer.setBandLevel(band,(short)args.getInt("value"));persistEqualizer(-1);}
+                        else if(action.equals("reset")&&equalizer!=null){for(short band=0;band<equalizer.getNumberOfBands();band++)equalizer.setBandLevel(band,(short)0);persistEqualizer(-1);}
+                        attachEqualizer(player.getAudioSessionId());
+                        android.os.Bundle result=equalizerState();
                         return Futures.immediateFuture(new androidx.media3.session.SessionResult(
                             androidx.media3.session.SessionResult.RESULT_SUCCESS,result));
                       } else
@@ -506,6 +512,7 @@ public final class PlaybackService extends MediaLibraryService {
               if (!resumeOnFocusGain) abandonFocus();
             }
           }
+          @Override public void onAudioSessionIdChanged(int audioSessionId){if(owner==player)attachEqualizer(audioSessionId);}
           @Override
           public void onMediaItemTransition(MediaItem item, int reason) {
             if (owner != player) return;
@@ -649,6 +656,7 @@ public final class PlaybackService extends MediaLibraryService {
     resumeOnFocusGain = false;
     abandonFocus();
     if (crossfade != null) crossfade.cancel();
+    releaseEqualizer();
     if (session != null) {
       session.getPlayer().release();
       session.release();
@@ -659,6 +667,16 @@ public final class PlaybackService extends MediaLibraryService {
     urls.clear();
     super.onDestroy();
   }
+
+  private void attachEqualizer(int sessionId){
+    if(sessionId==C.AUDIO_SESSION_ID_UNSET||sessionId==0)return;
+    if(equalizer!=null&&equalizerSession==sessionId){equalizer.setEnabled(EqualizerStore.read(this).enabled());return;}
+    releaseEqualizer();
+    try{equalizer=new android.media.audiofx.Equalizer(0,sessionId);equalizerSession=sessionId;EqualizerStore.Profile saved=EqualizerStore.read(this);short[] levels=EqualizerStore.levels(saved.levels(),equalizer.getNumberOfBands());if(saved.preset()>=0&&saved.preset()<equalizer.getNumberOfPresets())equalizer.usePreset((short)saved.preset());else for(short band=0;band<levels.length;band++){short[] range=equalizer.getBandLevelRange();equalizer.setBandLevel(band,(short)Math.max(range[0],Math.min(range[1],levels[band])));}equalizer.setEnabled(saved.enabled());}catch(Exception unsupported){releaseEqualizer();}
+  }
+  private void persistEqualizer(int preset){if(equalizer==null)return;short[] levels=new short[equalizer.getNumberOfBands()];for(short band=0;band<levels.length;band++)levels[band]=equalizer.getBandLevel(band);EqualizerStore.write(this,new EqualizerStore.Profile(equalizer.getEnabled(),preset,EqualizerStore.levels(levels)));}
+  private android.os.Bundle equalizerState(){android.os.Bundle out=new android.os.Bundle();out.putInt("audioSession",player.getAudioSessionId());out.putBoolean("supported",equalizer!=null);if(equalizer==null)return out;out.putBoolean("enabled",equalizer.getEnabled());out.putShortArray("range",equalizer.getBandLevelRange());short[] levels=new short[equalizer.getNumberOfBands()];int[] frequencies=new int[levels.length];for(short band=0;band<levels.length;band++){levels[band]=equalizer.getBandLevel(band);frequencies[band]=equalizer.getCenterFreq(band);}out.putShortArray("levels",levels);out.putIntArray("frequencies",frequencies);String[] presets=new String[equalizer.getNumberOfPresets()];for(short i=0;i<presets.length;i++)presets[i]=equalizer.getPresetName(i);out.putStringArray("presets",presets);out.putInt("preset",equalizer.getCurrentPreset());return out;}
+  private void releaseEqualizer(){if(equalizer!=null)try{equalizer.release();}catch(Exception ignored){}equalizer=null;equalizerSession=C.AUDIO_SESSION_ID_UNSET;}
 
   private java.util.ArrayList<Integer> playbackOrder() {
     java.util.ArrayList<Integer> order = new java.util.ArrayList<>();
