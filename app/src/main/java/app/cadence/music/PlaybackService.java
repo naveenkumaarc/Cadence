@@ -317,7 +317,7 @@ public final class PlaybackService extends MediaLibraryService {
                         if(crossfade!=null)crossfade.cancel();
                       } else if (command.customAction.equals(EQUALIZER)) {
                         String action=args.getString("action","query");
-                        if(action.equals("enabled")){EqualizerStore.Profile saved=EqualizerStore.read(PlaybackService.this);EqualizerStore.write(PlaybackService.this,new EqualizerStore.Profile(args.getBoolean("value"),saved.preset(),saved.levels()));attachEqualizer(player.getAudioSessionId());}
+                        if(action.equals("enabled")){boolean enabled=args.getBoolean("value");EqualizerStore.Profile saved=EqualizerStore.read(PlaybackService.this);if(equalizer!=null)equalizer.setEnabled(enabled);EqualizerStore.write(PlaybackService.this,new EqualizerStore.Profile(enabled,saved.preset(),saved.levels()));}
                         else if(action.equals("preset")&&equalizer!=null){short preset=(short)args.getInt("value");equalizer.usePreset(preset);persistEqualizer(preset);}
                         else if(action.equals("band")&&equalizer!=null){short band=(short)args.getInt("band");equalizer.setBandLevel(band,(short)args.getInt("value"));persistEqualizer(-1);}
                         else if(action.equals("reset")&&equalizer!=null){for(short band=0;band<equalizer.getNumberOfBands();band++)equalizer.setBandLevel(band,(short)0);persistEqualizer(-1);}
