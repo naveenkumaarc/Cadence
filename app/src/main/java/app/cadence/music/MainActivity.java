@@ -1236,12 +1236,12 @@ public final class MainActivity extends Activity {
     heading.setPadding(0, dp(12), 0, dp(14));
     heading.addView(sectionTitle("Recents"), new LinearLayout.LayoutParams(0, -2, 1));
     List<MusicCatalog.Entry> recent = searchHistory.entries();
-    if (!recent.isEmpty()) heading.addView(button("Clear all", false, () ->
+    if (!recent.isEmpty()) {TextView clearAll=text("Clear all",UiStyle.FOOTNOTE,accentText,true);clearAll.setGravity(Gravity.CENTER);clearAll.setMinHeight(dp(48));clearAll.setPadding(dp(12),0,dp(4),0);clearAll.setOnClickListener(v ->
         new CadenceDialogBuilder(this).setTitle("Clear recent searches?")
             .setMessage("Clear the songs, albums and artists shown in Recents? Your playlists and downloads stay saved.")
             .setNegativeButton("Keep recents", null).setPositiveButton("Clear all", (d,n) -> {
               searchHistory.clear(); renderRecents(target);
-            }).show()), new LinearLayout.LayoutParams(-2, dp(48)));
+            }).show());heading.addView(clearAll, new LinearLayout.LayoutParams(-2, dp(48)));}
     target.addView(heading);
     for (MusicCatalog.Entry entry : recent) searchEntryRow(target, entry, true);
     if (recent.isEmpty()) {
@@ -1261,7 +1261,7 @@ public final class MainActivity extends Activity {
     TextView detail = text(kind + (entry.artist.isEmpty() ? "" : " - " + entry.artist), 13, MUTED, false);
     detail.setSingleLine(true); detail.setEllipsize(android.text.TextUtils.TruncateAt.END); labels.addView(detail);
     item.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
-    if (entry.track != null) item.addView(icon("save", "Save " + entry.title, () -> choosePlaylist(entry.track)), new LinearLayout.LayoutParams(dp(48), dp(48)));
+    if (entry.track != null && !recent) item.addView(icon("save", "Save " + entry.title, () -> choosePlaylist(entry.track)), new LinearLayout.LayoutParams(dp(48), dp(48)));
     if (recent) item.addView(icon("close", "Remove " + entry.title + " from recents", () -> {
       searchHistory.remove(entry); target.removeView(item);
       if (searchHistory.entries().isEmpty()) renderRecents(target);
