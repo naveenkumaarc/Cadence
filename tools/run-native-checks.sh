@@ -23,5 +23,9 @@ for theme in light dark; do
     picture="cadence-album-$theme-$scale"
     adb pull "/data/local/tmp/$picture.png" "artifacts/$picture.png" || true
   done
+  for state in idle typing loading results empty error; do
+    picture="cadence-search-$theme-$state"
+    adb pull "/data/local/tmp/$picture.png" "artifacts/$picture.png" || true
+  done
 done
 exit "$status"

@@ -74,8 +74,10 @@ public final class SearchViewModelTest {
     SearchViewModel model = new SearchViewModel(new SavedStateHandle(), dispatcher);model.attach(repository);
     model.onQueryChanged("ilayaraja");
     assertEquals(SearchViewModel.Phase.TYPING, model.state().getValue().phase());
-    dispatcher.advanceBy(399);assertEquals(SearchViewModel.Phase.TYPING, model.state().getValue().phase());
-    dispatcher.advanceBy(1);assertEquals(SearchViewModel.Phase.RESULTS, model.state().getValue().phase());
+    dispatcher.advanceBy(150);assertEquals(SearchViewModel.Phase.TYPING, model.state().getValue().phase());
+    dispatcher.moveClock(250);dispatcher.runNext();
+    assertEquals(SearchViewModel.Phase.LOADING, model.state().getValue().phase());
+    dispatcher.runNext();assertEquals(SearchViewModel.Phase.RESULTS, model.state().getValue().phase());
     assertEquals(List.of("ilayaraja:All"), repository.calls);
   }
 

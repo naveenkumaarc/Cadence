@@ -143,8 +143,6 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
   private String playerRelatedKey = "";
   private int relatedGeneration;
   private final java.util.Map<String, List<Track>> relatedCache = new java.util.LinkedHashMap<>();
-  private boolean searchLoading;
-  private String searchError = "";
   private LinearLayout searchResultsBody;
   private LinearLayout searchFilterChips;
   private EditText searchQueryView;
@@ -239,7 +237,6 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     buildShell();
     searchViewModel.lifecycleState().observe(this,state->{
       searchText=state.query();searchFilter=state.filter();
-      searchLoading=state.phase()==SearchViewModel.Phase.LOADING;searchError=state.message();
       catalogResults=new ArrayList<>(state.payload().music());
       podcastResults=new ArrayList<>(state.payload().podcasts());
       rankedSearch=new ArrayList<>(state.payload().ranked());
@@ -378,7 +375,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     root.addView(appBar);
     configureAppBar(page, "");
     RefreshScrollView scroll = new RefreshScrollView(this); mainScroll=scroll;
-    scroll.refreshAction(()->page.equals("Home")||page.equals("Search")&&!searchText.isBlank()&&!searchLoading,()->{if(page.equals("Home"))refreshDiscovery();else refreshSearch();});
+    scroll.refreshAction(()->{SearchViewModel.UiState search=searchViewModel==null?null:searchViewModel.state().getValue();return page.equals("Home")||page.equals("Search")&&search!=null&&!search.query().isBlank()&&search.phase()!=SearchViewModel.Phase.LOADING;},()->{if(page.equals("Home"))refreshDiscovery();else refreshSearch();});
     scroll.setFillViewport(true);
     scroll.setClipToPadding(false);
     body = column();
@@ -1129,8 +1126,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
   private void renderSearchResults() {
     if(searchResultsBody==null)return;
     SearchViewModel.UiState state=searchViewModel.state().getValue();
-    searchText=state.query();searchFilter=state.filter();searchLoading=state.phase()==SearchViewModel.Phase.LOADING;
-    searchError=state.message();catalogResults=new ArrayList<>(state.payload().music());
+    searchText=state.query();searchFilter=state.filter();catalogResults=new ArrayList<>(state.payload().music());
     podcastResults=new ArrayList<>(state.payload().podcasts());rankedSearch=new ArrayList<>(state.payload().ranked());
     searchResultsBody.setVisibility(View.VISIBLE);
     searchResultsBody.removeAllViews();
@@ -1140,10 +1136,9 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
       if(state.phase()==SearchViewModel.Phase.TYPING){renderSearchSuggestions(state);return;}
       if(rankedSearch.isEmpty()&&(!catalogResults.isEmpty()||!podcastResults.isEmpty()))
         rankedSearch=rankSearch(SearchRanker.parse(searchText),catalogResults,podcastResults,searchSignals(),searchFilter.equals("All"));
-      if (state.phase()==SearchViewModel.Phase.LOADING&&rankedSearch.isEmpty()) { body.addView(new SkeletonView(this,false)); return; }
-      if(state.phase()==SearchViewModel.Phase.LOADING){body.addView(new SkeletonView(this,false));gap(8);}
+      if (state.phase()==SearchViewModel.Phase.LOADING&&rankedSearch.isEmpty()) { renderSearchSkeletons(); return; }
       if (state.phase()==SearchViewModel.Phase.ERROR) {
-        body.addView(text(searchError,14,MUTED,false));
+        body.addView(text(state.message(),14,MUTED,false));
         body.addView(button("Retry",false,searchViewModel::retry));gap(12);
         if(rankedSearch.isEmpty())return;
       }
@@ -1189,6 +1184,13 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         View divider=new View(this);divider.setBackgroundColor(palette.divider());
         LinearLayout.LayoutParams line=new LinearLayout.LayoutParams(-1,dp(UiStyle.HAIRLINE));line.setMargins(dp(60),0,0,0);body.addView(divider,line);
       }
+    }
+  }
+
+  private void renderSearchSkeletons(){
+    for(int index=0;index<6;index++){
+      body.addView(new SkeletonView(this,false),new LinearLayout.LayoutParams(-1,-2));
+      if(index<5)gap(UiStyle.SPACE_2);
     }
   }
 

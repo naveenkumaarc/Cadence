@@ -36,12 +36,14 @@ public final class RegressionUiIntegrationTest {
   private void main(Checked task){instrumentation.runOnMainSync(()->{try{task.run();}catch(Exception error){throw new RuntimeException(error);}});}
   private Object field(String name)throws Exception{Field field=MainActivity.class.getDeclaredField(name);field.setAccessible(true);return field.get(activity);}
   private void call(String name)throws Exception{Method method=MainActivity.class.getDeclaredMethod(name);method.setAccessible(true);method.invoke(activity);}
+  private void call(String name,Class<?> type,Object value)throws Exception{Method method=MainActivity.class.getDeclaredMethod(name,type);method.setAccessible(true);method.invoke(activity,value);}
   private List<Button> buttons(View root){List<Button> found=new ArrayList<>();collectButtons(root,found);return found;}
   private void collectButtons(View view,List<Button> found){if(view instanceof Button button)found.add(button);if(view instanceof ViewGroup group)for(int index=0;index<group.getChildCount();index++)collectButtons(group.getChildAt(index),found);}
   private Button button(String label){return buttons(activity.getWindow().getDecorView()).stream().filter(candidate->label.contentEquals(candidate.getText())).findFirst().orElse(null);}
   private View text(View view,String label){if(view instanceof android.widget.TextView value&&!(view instanceof EditText)&&label.contentEquals(value.getText()))return view;if(view instanceof ViewGroup group)for(int index=0;index<group.getChildCount();index++){View found=text(group.getChildAt(index),label);if(found!=null)return found;}return null;}
-  private SearchViewModel.Payload payload(String query){MusicCatalog.Entry entry=new MusicCatalog.Entry();entry.kind="song";entry.title=query;entry.artist="Ilaiyaraaja";SearchRanker.Document document=new SearchRanker.Document(query,SearchRanker.Type.SONG,query,entry.artist,"","","","",0,false,false,false,false);return new SearchViewModel.Payload(List.of(entry),List.of(),List.of(new SearchViewModel.Item(new SearchRanker.Ranked(document,100,true),entry,null)),"");}
-  private void fakeSearch()throws Exception{SearchViewModel model=(SearchViewModel)field("searchViewModel");model.onQueryChanged("");model.attach(new SearchViewModel.Repository(){public SearchViewModel.Payload search(String query,String filter){return payload(query);}public List<String> suggestions(String query){return List.of(query+" songs",query+" hits");}});}
+  private SearchViewModel.Payload payload(String query){return payload(query,1);}
+  private SearchViewModel.Payload payload(String query,int count){List<MusicCatalog.Entry> entries=new ArrayList<>();List<SearchViewModel.Item> items=new ArrayList<>();for(int index=1;index<=count;index++){MusicCatalog.Entry entry=new MusicCatalog.Entry();entry.kind="song";entry.title=count==1?query:query+" "+index;entry.artist="Ilaiyaraaja";entries.add(entry);SearchRanker.Document document=new SearchRanker.Document(query+index,SearchRanker.Type.SONG,entry.title,entry.artist,"","","","",0,false,false,false,false);items.add(new SearchViewModel.Item(new SearchRanker.Ranked(document,100-index,true),entry,null));}return new SearchViewModel.Payload(entries,List.of(),items,"");}
+  private void fakeSearch()throws Exception{SearchViewModel model=(SearchViewModel)field("searchViewModel");model.onQueryChanged("");model.attach(new SearchViewModel.Repository(){public SearchViewModel.Payload search(String query,String filter){return payload(query);}public List<String> suggestions(String query){return List.of(query,query+" songs",query+" songs",query+" hits");}});}
   @Before public void launch(){activity=(MainActivity)instrumentation.startActivitySync(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}
   @After public void close(){if(activity!=null)main(activity::finish);}
 
@@ -88,5 +90,39 @@ public final class RegressionUiIntegrationTest {
     main(()->{long now=android.os.SystemClock.uptimeMillis();MotionEvent down=MotionEvent.obtain(now,now,MotionEvent.ACTION_DOWN,300,40,0);MotionEvent up=MotionEvent.obtain(now,now+80,MotionEvent.ACTION_UP,20,42,0);pages.dispatchTouchEvent(down);pages.dispatchTouchEvent(up);down.recycle();up.recycle();});
     assertEquals("Songs",field("libraryFilter"));assertTrue(button("Songs").isSelected());
     Bundle state=new Bundle();main(()->activity.onSaveInstanceState(state));assertEquals("Songs",state.getString("libraryFilter"));
+  }
+
+  @Test public void suggestionsAreRowsAndTappingOneSubmitsSearch()throws Exception{
+    fakeSearch();main(()->call("showSearch"));EditText query=(EditText)field("searchQueryView");
+    main(()->{query.requestFocus();query.setText("ilayaraja");query.setSelection(query.length());});
+    for(int attempt=0;attempt<20&&text(activity.getWindow().getDecorView(),"ilayaraja songs")==null;attempt++)Thread.sleep(25);
+    assertNotNull(text(activity.getWindow().getDecorView(),"ilayaraja songs"));
+    assertNull("The typed query must not be repeated as a suggestion",text(activity.getWindow().getDecorView(),"ilayaraja"));
+    View suggestion=text(activity.getWindow().getDecorView(),"ilayaraja songs");assertNotNull(suggestion);
+    main(()->((View)suggestion.getParent()).performClick());
+    SearchViewModel model=(SearchViewModel)field("searchViewModel");
+    for(int attempt=0;attempt<40&&model.state().getValue().phase()!=SearchViewModel.Phase.RESULTS;attempt++)Thread.sleep(25);
+    SearchViewModel.UiState state=model.state().getValue();
+    assertTrue(state.submitted());assertEquals(SearchViewModel.Phase.RESULTS,state.phase());
+  }
+
+  @Test public void leavingSearchAndReturningRestoresQueryChipAndResults()throws Exception{
+    fakeSearch();main(()->call("showSearch"));EditText query=(EditText)field("searchQueryView");
+    main(()->{query.setText("ilayaraja");query.setSelection(query.length());});Thread.sleep(500);
+    main(()->button("Songs").performClick());Thread.sleep(100);
+    main(()->call("navigate",String.class,"Home"));main(()->call("navigate",String.class,"Search"));
+    EditText restored=(EditText)field("searchQueryView");assertEquals("ilayaraja",restored.getText().toString());
+    assertTrue(button("Songs").isSelected());assertNotNull(text(activity.getWindow().getDecorView(),"ilayaraja"));
+  }
+
+  @Test public void lastResultScrollsAboveVisibleIme()throws Exception{
+    SearchViewModel model=(SearchViewModel)field("searchViewModel");model.onQueryChanged("");model.attach(new SearchViewModel.Repository(){public SearchViewModel.Payload search(String query,String filter){return payload(query,12);}public List<String> suggestions(String query){return List.of();}});
+    main(()->call("showSearch"));EditText query=(EditText)field("searchQueryView");
+    main(()->{query.requestFocus();query.setText("visible row");query.setSelection(query.length());((InputMethodManager)context.getSystemService(Context.INPUT_METHOD_SERVICE)).showSoftInput(query,InputMethodManager.SHOW_IMPLICIT);model.submit("visible row");});
+    for(int attempt=0;attempt<80&&model.state().getValue().phase()!=SearchViewModel.Phase.RESULTS;attempt++)Thread.sleep(25);
+    android.widget.ScrollView scroll=(android.widget.ScrollView)field("mainScroll");main(()->scroll.fullScroll(View.FOCUS_DOWN));instrumentation.waitForIdleSync();
+    View last=text(activity.getWindow().getDecorView(),"visible row 12");assertNotNull(last);android.graphics.Rect visible=new android.graphics.Rect();assertTrue(last.getGlobalVisibleRect(visible));
+    androidx.core.view.WindowInsetsCompat insets=androidx.core.view.ViewCompat.getRootWindowInsets(query);assertNotNull(insets);
+    if(insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())){int imeTop=activity.getWindow().getDecorView().getHeight()-insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom;assertTrue("Last row must remain above IME",visible.bottom<=imeTop+2);}
   }
 }
