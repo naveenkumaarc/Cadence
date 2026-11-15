@@ -670,7 +670,7 @@ public final class PlaybackService extends MediaLibraryService {
 
   private void attachEqualizer(int sessionId){
     if(sessionId==C.AUDIO_SESSION_ID_UNSET||sessionId==0)return;
-    if(equalizer!=null&&equalizerSession==sessionId){equalizer.setEnabled(EqualizerStore.read(this).enabled());return;}
+    if(equalizer!=null&&equalizerSession==sessionId)return;
     releaseEqualizer();
     try{equalizer=new android.media.audiofx.Equalizer(0,sessionId);equalizerSession=sessionId;EqualizerStore.Profile saved=EqualizerStore.read(this);short[] levels=EqualizerStore.levels(saved.levels(),equalizer.getNumberOfBands());if(saved.preset()>=0&&saved.preset()<equalizer.getNumberOfPresets())equalizer.usePreset((short)saved.preset());else for(short band=0;band<levels.length;band++){short[] range=equalizer.getBandLevelRange();equalizer.setBandLevel(band,(short)Math.max(range[0],Math.min(range[1],levels[band])));}equalizer.setEnabled(saved.enabled());}catch(Exception unsupported){releaseEqualizer();}
   }
@@ -1117,6 +1117,7 @@ public final class PlaybackService extends MediaLibraryService {
           }
           prioritizeManual();
           session.setPlayer(new TransportPlayer(PlaybackService.this,player));
+          attachEqualizer(player.getAudioSessionId());
           swapping=false;
           saveQueue(); publishWidget();
         }

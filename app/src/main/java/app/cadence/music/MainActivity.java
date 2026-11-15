@@ -156,11 +156,13 @@ public final class MainActivity extends Activity {
   private boolean searchLoading;
   private String searchError = "";
   private LinearLayout searchResultsBody;
+  private LinearLayout searchFilterChips;
   private EditText searchQueryView;
   private Artwork playerArt;
   private SeekBar playerSeek;
   private boolean playerSeeking;
   private Dialog playerDialog;
+  private Dialog equalizerDialog;
   private TransportButton playerPlay;
   private final Player.Listener listener =
       new Player.Listener() {
@@ -296,6 +298,7 @@ public final class MainActivity extends Activity {
     if (googleLogin != null) googleLogin.close();
     ui.removeCallbacksAndMessages(null);
     if (playerDialog != null) playerDialog.dismiss();
+    if (equalizerDialog != null) equalizerDialog.dismiss();
     if (queueDialog != null) queueDialog.dismiss();
     workers.shutdownNow();
     discoveryWorkers.shutdownNow();
@@ -341,18 +344,19 @@ public final class MainActivity extends Activity {
     getWindow().setNavigationBarColor(BG);
     root.setOnApplyWindowInsetsListener(
         (v, insets) -> {
-          if (Build.VERSION.SDK_INT >= 30) {
-            android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
-            v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
-            boolean keyboard=insets.isVisible(WindowInsets.Type.ime());
-            if(mini!=null)mini.setVisibility(keyboard?View.GONE:(controller!=null&&controller.getCurrentMediaItem()!=null?View.VISIBLE:View.GONE));
-            if(navigationShell!=null)navigationShell.setVisibility(keyboard?View.GONE:View.VISIBLE);
-          } else
-            v.setPadding(
-                insets.getSystemWindowInsetLeft(),
-                insets.getSystemWindowInsetTop(),
-                insets.getSystemWindowInsetRight(),
-                insets.getSystemWindowInsetBottom());
+          androidx.core.view.WindowInsetsCompat compat=
+              androidx.core.view.WindowInsetsCompat.toWindowInsetsCompat(insets,v);
+          androidx.core.graphics.Insets bars=compat.getInsets(
+              androidx.core.view.WindowInsetsCompat.Type.systemBars());
+          androidx.core.graphics.Insets ime=compat.getInsets(
+              androidx.core.view.WindowInsetsCompat.Type.ime());
+          boolean keyboard=compat.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime());
+          v.setPadding(bars.left,bars.top,bars.right,bars.bottom);
+          if(mainScroll!=null)mainScroll.setPadding(0,0,0,
+              page.equals("Search")&&keyboard?Math.max(0,ime.bottom-bars.bottom):0);
+          if(mini!=null)mini.setVisibility(keyboard?View.GONE:
+              (controller!=null&&controller.getCurrentMediaItem()!=null?View.VISIBLE:View.GONE));
+          if(navigationShell!=null)navigationShell.setVisibility(keyboard?View.GONE:View.VISIBLE);
           return insets;
         });
     appBar = row();
@@ -746,6 +750,7 @@ public final class MainActivity extends Activity {
 
   private Button chip(String title, boolean selected, Runnable action) {
     Button b = button(title, selected, action);
+    b.setSelected(selected);
     b.setTextSize(UiStyle.FOOTNOTE);
     b.setBackground(ripple(selected ? accent : palette.surface(), UiStyle.RADIUS_PILL));
     b.setMinWidth(0); b.setMinimumWidth(0);
@@ -1134,13 +1139,8 @@ public final class MainActivity extends Activity {
     gap(16);
     android.widget.HorizontalScrollView sc = new android.widget.HorizontalScrollView(this);
     sc.setHorizontalScrollBarEnabled(false);
-    LinearLayout filters = row();
-    for (String filter : List.of("All", "Songs", "Albums", "Artists", "Playlists", "Podcasts"))
-      filters.addView(chip(filter, searchFilter.equals(filter), () -> {
-        searchFilter = filter;searchError = "";
-        showSearch(); searchMusic();
-      }));
-    sc.addView(filters);addBleedingHorizontal(sc,UiStyle.SPACE_2);gap(8);
+    searchFilterChips = row();refreshSearchFilterChips();
+    sc.addView(searchFilterChips);addBleedingHorizontal(sc,UiStyle.SPACE_2);gap(8);
     searchResultsBody = column(); body.addView(searchResultsBody);
     renderSearchResults();
   }
@@ -1168,6 +1168,8 @@ public final class MainActivity extends Activity {
     } finally { body = outer; }
   }
 
+  private void refreshSearchFilterChips(){if(searchFilterChips==null)return;searchFilterChips.removeAllViews();for(String filter:List.of("All","Songs","Albums","Artists","Playlists","Podcasts"))searchFilterChips.addView(chip(filter,searchFilter.equals(filter),()->{searchFilter=filter;searchError="";refreshSearchFilterChips();renderSearchResults();searchMusic();}));}
+
   private void renderAllSearch() {
     SearchItem top=rankedSearch.get(0);searchHeading("Top result",null);topResultCard(top);gap(22);
     java.util.Map<SearchRanker.Type,List<SearchItem>> sections=new java.util.EnumMap<>(SearchRanker.Type.class);
@@ -1185,7 +1187,7 @@ public final class MainActivity extends Activity {
   }
 
   private void renderSearchSection(SearchRanker.Type type,List<SearchItem> items) {
-    if(items.isEmpty())return;searchHeading(type.label,()->{searchFilter=type.label;showSearch();searchMusic();});gap(6);
+    if(items.isEmpty())return;searchHeading(type.label,()->{searchFilter=type.label;refreshSearchFilterChips();renderSearchResults();searchMusic();});gap(6);
     int limit=switch(type){case SONG->5;case ARTIST,PLAYLIST,PODCAST->3;case ALBUM->10;};
     List<SearchItem> visible=items.subList(0,Math.min(limit,items.size()));
     if(type==SearchRanker.Type.ALBUM)searchAlbumShelf(visible);else for(SearchItem item:visible)searchItemRow(item);
@@ -1267,6 +1269,10 @@ public final class MainActivity extends Activity {
       searchHistory.remove(entry); target.removeView(item);
       if (searchHistory.entries().isEmpty()) renderRecents(target);
     }), new LinearLayout.LayoutParams(dp(48), dp(48)));
+    if(recent){final float[] swipeStart={0,0};item.setOnTouchListener((view,event)->{
+      if(event.getActionMasked()==android.view.MotionEvent.ACTION_DOWN){swipeStart[0]=event.getX();swipeStart[1]=event.getY();}
+      else if(event.getActionMasked()==android.view.MotionEvent.ACTION_UP){float dx=event.getX()-swipeStart[0],dy=event.getY()-swipeStart[1];if(dx<-dp(64)&&Math.abs(dx)>Math.abs(dy)){searchHistory.remove(entry);item.animate().translationX(-item.getWidth()).alpha(0).setDuration(UiStyle.MOTION_STANDARD).withEndAction(()->{target.removeView(item);if(searchHistory.entries().isEmpty())renderRecents(target);}).start();return true;}}
+      return false;});}
     else item.addView(icon("more", "Options for " + entry.title, () -> {
       if (entry.track != null) trackOptions(entry.track, null); else openCollection(entry);
     }), new LinearLayout.LayoutParams(dp(48), dp(48)));
@@ -3462,17 +3468,18 @@ public final class MainActivity extends Activity {
   }
 
   private void showEqualizerSheet(Bundle state){
-    Dialog dialog=new Dialog(this,palette.light()?R.style.AppLightTheme:R.style.AppTheme);LinearLayout content=column();content.setPadding(dp(20),dp(16),dp(20),dp(24));content.setBackground(round(BG,UiStyle.RADIUS_SHEET));
+    if(equalizerDialog!=null)equalizerDialog.dismiss();Dialog dialog=new Dialog(this,palette.light()?R.style.AppLightTheme:R.style.AppTheme);equalizerDialog=dialog;LinearLayout content=column();content.setPadding(dp(20),dp(16),dp(20),dp(24));content.setBackground(round(BG,UiStyle.RADIUS_SHEET));
     LinearLayout title=row();title.addView(text("Equalizer",UiStyle.TITLE,INK,true),new LinearLayout.LayoutParams(0,-2,1));title.addView(icon("close","Close equalizer",dialog::dismiss),new LinearLayout.LayoutParams(dp(48),dp(48)));content.addView(title);
     if(!state.getBoolean("supported")){content.addView(text("Not supported on this device",UiStyle.BODY,MUTED,false));}
     else {android.widget.Switch enabled=new android.widget.Switch(this);enabled.setText("On");enabled.setTextColor(INK);enabled.setChecked(state.getBoolean("enabled"));enabled.setMinimumHeight(dp(48));enabled.setOnCheckedChangeListener((v,on)->equalizerCommand("enabled",-1,on?1:0));content.addView(enabled);
       String[] presets=state.getStringArray("presets");if(presets!=null&&presets.length>0){android.widget.HorizontalScrollView scroll=new android.widget.HorizontalScrollView(this);LinearLayout chips=row();for(int i=0;i<presets.length;i++){int preset=i;chips.addView(chip(presets[i],i==state.getInt("preset"),()->equalizerCommand("preset",-1,preset)));}scroll.addView(chips);content.addView(scroll);}
-      short[] range=state.getShortArray("range"),levels=state.getShortArray("levels");int[] frequencies=state.getIntArray("frequencies");if(range!=null&&levels!=null){for(int i=0;i<levels.length;i++){int band=i;LinearLayout row=row();TextView label=text(frequencies[i]/1000+" Hz",UiStyle.FOOTNOTE,MUTED,false);row.addView(label,new LinearLayout.LayoutParams(dp(72),-2));SeekBar slider=new SeekBar(this);slider.setMax(range[1]-range[0]);slider.setProgress(levels[i]-range[0]);slider.setMinimumHeight(dp(48));slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}public void onProgressChanged(SeekBar b,int value,boolean user){if(user)equalizerCommand("band",band,value+range[0]);}});row.addView(slider,new LinearLayout.LayoutParams(0,dp(48),1));content.addView(row);}}
+      short[] range=state.getShortArray("range"),levels=state.getShortArray("levels");int[] frequencies=state.getIntArray("frequencies");if(range!=null&&levels!=null&&frequencies!=null){android.widget.HorizontalScrollView bandScroll=new android.widget.HorizontalScrollView(this);bandScroll.setHorizontalScrollBarEnabled(false);LinearLayout bands=row();bands.setGravity(Gravity.BOTTOM);for(int i=0;i<levels.length;i++){int band=i;LinearLayout control=column();control.setGravity(Gravity.CENTER_HORIZONTAL);TextView db=text(String.format(java.util.Locale.ROOT,"%+.1f dB",levels[i]/100f),UiStyle.CAPTION,MUTED,false);db.setGravity(Gravity.CENTER);control.addView(db,new LinearLayout.LayoutParams(dp(72),-2));VerticalSlider slider=new VerticalSlider(this,range[0],range[1],levels[i]);slider.setContentDescription("Equalizer "+frequencies[i]/1000+" hertz");slider.listener((value,user)->{db.setText(String.format(java.util.Locale.ROOT,"%+.1f dB",value/100f));if(user)equalizerCommand("band",band,value);});control.addView(slider,new LinearLayout.LayoutParams(dp(64),dp(200)));TextView frequency=text(bandFrequency(frequencies[i]),UiStyle.CAPTION,MUTED,false);frequency.setGravity(Gravity.CENTER);control.addView(frequency,new LinearLayout.LayoutParams(dp(72),-2));bands.addView(control);}bandScroll.addView(bands);content.addView(bandScroll,new LinearLayout.LayoutParams(-1,-2));}
       content.addView(button("Reset",false,()->equalizerCommand("reset",-1,0)));
       int session=state.getInt("audioSession");Intent system=new Intent(android.media.audiofx.AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL).putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION,session).putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME,getPackageName()).putExtra(android.media.audiofx.AudioEffect.EXTRA_CONTENT_TYPE,android.media.audiofx.AudioEffect.CONTENT_TYPE_MUSIC);if(system.resolveActivity(getPackageManager())!=null)content.addView(button("Open system equalizer",false,()->startActivity(system)));
     }
-    ScrollView scroll=new ScrollView(this);scroll.addView(content);dialog.setContentView(scroll);dialog.show();if(dialog.getWindow()!=null){dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);dialog.getWindow().setGravity(Gravity.BOTTOM);dialog.getWindow().setLayout(-1,Math.min(dp(680),getResources().getDisplayMetrics().heightPixels*4/5));}
+    ScrollView scroll=new ScrollView(this);scroll.addView(content);dialog.setContentView(scroll);dialog.setOnDismissListener(ignored->{if(equalizerDialog==dialog)equalizerDialog=null;});dialog.show();if(dialog.getWindow()!=null){dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);dialog.getWindow().setGravity(Gravity.BOTTOM);dialog.getWindow().setLayout(-1,Math.min(dp(680),getResources().getDisplayMetrics().heightPixels*4/5));}
   }
+  private static String bandFrequency(int milliHertz){float hz=milliHertz/1000f;return hz>=1000?String.format(java.util.Locale.ROOT,"%.1fk",hz/1000f):String.format(java.util.Locale.ROOT,"%.0f",hz);}
   private void equalizerCommand(String action,int band,int value){if(controller==null)return;Bundle args=new Bundle();args.putString("action",action);args.putInt("band",band);args.putInt("value",value);if(action.equals("enabled"))args.putBoolean("value",value==1);controller.sendCustomCommand(new androidx.media3.session.SessionCommand(PlaybackService.EQUALIZER,Bundle.EMPTY),args);}
 
   private <T> void work(String label, Callable<T> task, Consumer<T> done) {
@@ -3805,7 +3812,7 @@ public final class MainActivity extends Activity {
     LinearLayout suggestions=row();suggestions.setGravity(Gravity.CENTER);
     suggestions.addView(chip("New music",false,()->runMusicSearch("new music")));
     suggestions.addView(chip("Chill",false,()->runMusicSearch("chill")));
-    suggestions.addView(chip("Podcasts",false,()->{searchFilter="Podcasts";showSearch();}));
+    suggestions.addView(chip("Podcasts",false,()->{searchFilter="Podcasts";refreshSearchFilterChips();renderSearchResults();searchMusic();}));
     suggestionScroll.addView(suggestions);state.addView(suggestionScroll,new LinearLayout.LayoutParams(-1,-2));
     target.addView(state,new LinearLayout.LayoutParams(-1,-2));
   }
