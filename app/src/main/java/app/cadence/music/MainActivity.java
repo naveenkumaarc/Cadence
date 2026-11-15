@@ -1299,10 +1299,20 @@ public final class MainActivity extends Activity {
     search.addView(clear,new LinearLayout.LayoutParams(dp(UiStyle.TOUCH),dp(UiStyle.TOUCH)));body.addView(search);gap(12);
     android.widget.HorizontalScrollView filterScroll=new android.widget.HorizontalScrollView(this);
     filterScroll.setHorizontalScrollBarEnabled(false);LinearLayout filters=row();
-    for(String filter:List.of("Playlists","Songs","Podcasts","Downloaded"))
-      filters.addView(chip(filter,libraryFilter.equals(filter),()->{libraryFilter=filter;renderLibraryContent();}));
+    final Button[] selectedChip={null};
+    for(String filter:List.of("Playlists","Songs","Podcasts","Downloaded")) {
+      Button control=chip(filter,libraryFilter.equals(filter),()->{libraryFilter=filter;showLibrary();});
+      if(libraryFilter.equals(filter))selectedChip[0]=control;filters.addView(control);
+    }
     filterScroll.addView(filters);addBleedingHorizontal(filterScroll,18);
+    if(selectedChip[0]!=null)filterScroll.post(()->filterScroll.smoothScrollTo(
+        Math.max(0,selectedChip[0].getLeft()-dp(UiStyle.SCREEN_INSET)),0));
     libraryResults=column();body.addView(libraryResults);
+    final float[] swipe={0,0};libraryResults.setOnTouchListener((v,event)->{
+      if(event.getActionMasked()==android.view.MotionEvent.ACTION_DOWN){swipe[0]=event.getX();swipe[1]=event.getY();}
+      else if(event.getActionMasked()==android.view.MotionEvent.ACTION_UP){float dx=event.getX()-swipe[0],dy=event.getY()-swipe[1];
+        if(Math.abs(dx)>dp(72)&&Math.abs(dx)>Math.abs(dy)){List<String> tabs=List.of("Playlists","Songs","Podcasts","Downloaded");int at=tabs.indexOf(libraryFilter);int next=Math.max(0,Math.min(tabs.size()-1,at+(dx<0?1:-1)));if(next!=at){libraryFilter=tabs.get(next);showLibrary();return true;}}}
+      return false;});
     query.addTextChangedListener(new android.text.TextWatcher(){
       public void beforeTextChanged(CharSequence s,int a,int b,int c){}
       public void afterTextChanged(android.text.Editable value){}
@@ -3834,6 +3844,7 @@ public final class MainActivity extends Activity {
 
   private void restoreScreen(Bundle state) {
     if(state==null){showHome();return;}searchText=state.getString("searchText","");searchFilter=state.getString("searchFilter","All");
+    libraryFilter=state.getString("libraryFilter","Playlists");
     homeTab=state.getString("homeTab","Music");
     ArrayList<Bundle> history=state.getParcelableArrayList("screenHistory");if(history!=null){screenHistory.clear();screenHistory.addAll(history);}
     if(state.containsKey("collection"))collectionEntry=new com.google.gson.Gson().fromJson(state.getString("collection"),MusicCatalog.Entry.class);
@@ -3852,7 +3863,7 @@ public final class MainActivity extends Activity {
     Bundle saved=captureScreen();screenHistory.add(saved);
   }
   private Bundle captureScreen() {
-    Bundle out=new Bundle();out.putString("page",page);out.putString("searchText",searchText);out.putString("searchFilter",searchFilter);out.putString("homeTab",homeTab);
+    Bundle out=new Bundle();out.putString("page",page);out.putString("searchText",searchText);out.putString("searchFilter",searchFilter);out.putString("homeTab",homeTab);out.putString("libraryFilter",libraryFilter);
     out.putInt("scroll",mainScroll==null?0:mainScroll.getScrollY());
     if(collectionEntry!=null)out.putString("collection",new com.google.gson.Gson().toJson(collectionEntry));
     if(shownPlaylist!=null)out.putString("playlist",shownPlaylist.id);if(shownShow!=null)out.putString("feed",shownShow.feedUrl);return out;

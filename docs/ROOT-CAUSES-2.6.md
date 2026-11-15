@@ -26,3 +26,14 @@ Search now keeps one attached input while only its result container is replaced.
 still generation-checked and stale work is cancelled; loading uses skeleton rows without replacing
 the field. IME insets hide playback/navigation chrome, and a user drag dismisses the keyboard while
 result updates never do.
+
+## Task 3 — library chip selection
+
+The chip background was fixed when `showLibrary()` created the row, but a tap changed
+`libraryFilter` and called only `renderLibraryContent()`. The content therefore followed the new
+value while the existing chip drawables still represented the old value. The selected filter also
+was not included in saved instance state.
+
+Library filter changes now flow through the single `libraryFilter` state and rebuild the chip row
+and content together. That value is saved/restored, horizontal page gestures update the same state,
+and the edge-to-edge scroll row automatically brings its selected chip fully into view.
