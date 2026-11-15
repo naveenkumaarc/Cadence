@@ -1333,10 +1333,10 @@ public final class MainActivity extends Activity {
         Library.Playlist liked=library.playlists.stream().filter(p->p.id.equals("favourites")).findFirst().orElse(null);
         if(liked!=null)playlistCard(liked);
       } else if(libraryFilter.equals("Podcasts")) {
-        body.addView(button("Find podcasts",true,()->navigate("Podcasts")),new LinearLayout.LayoutParams(-1,dp(UiStyle.TOUCH)));gap(12);
+        body.addView(libraryActionRow("Find podcasts",()->navigate("Podcasts")));gap(12);
         for(Podcasts.Show show:podcasts.subscriptions())if(needle.isEmpty()||show.title.toLowerCase(java.util.Locale.ROOT).contains(needle))podcastCard(body,show,()->showPodcast(show));
       } else {
-        body.addView(button("Download queue",false,this::showDownloadQueue));gap(12);
+        body.addView(libraryActionRow("Download queue",this::showDownloadQueue));gap(12);
         Library.Playlist downloaded=songDownloads.playlist();if(needle.isEmpty()||downloaded.name.toLowerCase(java.util.Locale.ROOT).contains(needle))playlistCard(downloaded);
         try{Library.Playlist saved=DownloadList.playlist(this);if(!saved.tracks.isEmpty()&&(needle.isEmpty()||saved.name.toLowerCase(java.util.Locale.ROOT).contains(needle)))playlistCard(saved);}catch(Exception ignored){}
       }
@@ -1406,6 +1406,8 @@ public final class MainActivity extends Activity {
       libraryList.addView(card,new LinearLayout.LayoutParams(-1,-2));
     }
   }
+
+  private View libraryActionRow(String label,Runnable action){LinearLayout row=row();row.setMinimumHeight(dp(48));row.setPadding(dp(12),0,0,0);row.setBackground(ripple(Color.TRANSPARENT,UiStyle.RADIUS_CARD));row.addView(text(label,UiStyle.BODY,INK,false),new LinearLayout.LayoutParams(0,-2,1));row.addView(new AppIcon(this,"chevron",MUTED,label),new LinearLayout.LayoutParams(dp(48),dp(48)));row.setOnClickListener(v->UiStyle.press(v,action));return row;}
 
   private void showPlaylist(Library.Playlist requested) {
     if(!page.equals("Playlist"))rememberScreen();
