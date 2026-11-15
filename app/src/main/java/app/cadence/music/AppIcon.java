@@ -79,6 +79,12 @@ final class AppIcon extends View {
         canvas.drawCircle(22, 22, 9, p);
         canvas.drawLine(29, 29, 36, 36, p);
       }
+      case "clock" -> {
+        canvas.drawCircle(24,24,11,p);canvas.drawLine(24,24,24,17,p);canvas.drawLine(24,24,30,27,p);
+      }
+      case "fill" -> {
+        canvas.drawLine(32,15,17,30,p);canvas.drawLine(17,30,17,20,p);canvas.drawLine(17,30,27,30,p);
+      }
       case "library" -> {
         canvas.drawLine(14, 14, 14, 35, p);
         canvas.drawLine(21, 14, 21, 35, p);

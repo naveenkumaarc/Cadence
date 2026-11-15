@@ -49,6 +49,22 @@ final class SearchHistory {
     all.removeIf(e -> key(e).equals(key(entry))); write(all);
   }
   void clear() { prefs.edit().remove("entries").apply(); }
+  List<String> queries() {
+    List<String> result=new ArrayList<>();
+    try {
+      JSONArray array=new JSONArray(prefs.getString("queries","[]"));
+      for(int index=0;index<Math.min(20,array.length());index++){
+        String value=array.optString(index).trim();if(!value.isEmpty())result.add(value);
+      }
+    } catch(Exception ignored) { }
+    return result;
+  }
+  void rememberQuery(String query) {
+    String value=query==null?"":query.trim();if(value.isEmpty())return;
+    List<String> all=queries();all.removeIf(item->item.equalsIgnoreCase(value));all.add(0,value);
+    JSONArray array=new JSONArray();for(String item:all.subList(0,Math.min(20,all.size())))array.put(item);
+    prefs.edit().putString("queries",array.toString()).apply();
+  }
   private String key(MusicCatalog.Entry entry) {
     return entry.kind + ":" + (entry.track == null ? entry.browseId : entry.track.sourceUrl)
         + ":" + entry.title + ":" + entry.artist;

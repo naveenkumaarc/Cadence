@@ -114,4 +114,14 @@ public final class SearchViewModelTest {
     model.onQueryChanged("ilayaraja");model.selectFilter("Songs");
     assertEquals("ilayaraja", saved.get("search.query"));assertEquals("Songs", saved.get("search.filter"));
   }
+
+  @Test public void suggestionsAreRecentFirstUniqueAndExcludeTypedQuery() {
+    List<String> clean=SearchViewModel.cleanSuggestions("ilayaraja",
+        List.of("Ilayaraja hits","Other recent"),
+        List.of("ilayaraja","ILAYARAJA HITS","ilayaraja melody songs","ilayaraja songs",
+            "ilayaraja tamil hits","ilayaraja telugu","seventh value"));
+    assertEquals("Ilayaraja hits",clean.get(0));assertFalse(clean.contains("ilayaraja"));
+    assertEquals(6,clean.size());assertEquals(clean.size(),new java.util.HashSet<>(
+        clean.stream().map(value->value.toLowerCase(java.util.Locale.ROOT)).toList()).size());
+  }
 }

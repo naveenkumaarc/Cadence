@@ -113,13 +113,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
   private final java.util.Map<String, MusicCatalog.Home> languageHomes = new java.util.HashMap<>();
   private final java.util.Set<String> loadingHomes = new java.util.HashSet<>();
   private final java.util.Map<String, String> languageErrors = new java.util.HashMap<>();
-  private java.util.concurrent.Future<?> suggestionTask;
-  private final ExecutorService suggestions = Executors.newFixedThreadPool(2);
   private final ExecutorService searchNetwork = Executors.newFixedThreadPool(5);
-  private int suggestionGeneration;
-  private Runnable pendingSuggestion;
-  private Runnable pendingSearch;
-  private java.util.concurrent.Future<?> searchTask;
   private String queueStamp = "";
   private android.content.BroadcastReceiver downloadsReceiver;
   private MediaController controller;
@@ -239,6 +233,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
       public List<String> suggestions(String query)throws Exception {
         return MusicCatalog.suggestions(query);
       }
+      public List<String> recentQueries(){return searchHistory.queries();}
     });
     buildShell();
     searchViewModel.lifecycleState().observe(this,state->{
@@ -322,7 +317,6 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     if (queueDialog != null) queueDialog.dismiss();
     workers.shutdownNow();
     discoveryWorkers.shutdownNow();
-    suggestions.shutdownNow();
     searchNetwork.shutdownNow();
     durationWorkers.shutdownNow();
     if (downloadsReceiver != null)
@@ -699,12 +693,10 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     AppIcon submitIcon = icon("arrow", "Submit search", () -> {});
     search.addView(submitIcon, new LinearLayout.LayoutParams(dp(48), dp(48)));
     body.addView(search, new LinearLayout.LayoutParams(-1, -2));
-    LinearLayout panel = column(); body.addView(panel);
     Runnable submit = () -> {
       String value = query.getText().toString().trim(); if (value.isEmpty()) return;
-      suggestionGeneration++; if (pendingSuggestion != null) ui.removeCallbacks(pendingSuggestion);
-      panel.removeAllViews();
       searchText = value;
+      searchHistory.rememberQuery(value);
       ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(query.getWindowToken(), 0);
       if (value.startsWith("http")) openYouTubeLink(value);
       else if(searchPage)searchViewModel.submit(value);
@@ -721,39 +713,6 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
         if (searchPage) {
           searchViewModel.onQueryChanged(value.toString());
         }
-        int generation = ++suggestionGeneration;
-        if (pendingSuggestion != null) ui.removeCallbacks(pendingSuggestion);
-        if (suggestionTask != null) suggestionTask.cancel(true);
-        panel.removeAllViews(); String term = value.toString().trim();
-        if (term.length() < 2 || term.startsWith("http")) {
-          if (searchPage && term.isEmpty()) renderRecents(panel);
-          return;
-        }
-        pendingSuggestion = () -> suggestionTask = suggestions.submit(() -> {
-          List<String> words = new ArrayList<>(); List<Track> tracks = new ArrayList<>();
-          try { words = MusicCatalog.suggestions(term); } catch (Exception ignored) {}
-          if (Thread.currentThread().isInterrupted()) return;
-          try { tracks = MusicCatalog.songs(term); } catch (Exception ignored) {}
-          List<String> completions = words; List<Track> matches = tracks;
-          ui.post(() -> {
-            if (destroyed || generation != suggestionGeneration || !query.isAttachedToWindow()) return;
-            panel.removeAllViews();
-            for (String word : completions) {
-              Button option = button(word, false, () -> { query.setText(word); query.setSelection(word.length()); submit.run(); });
-              option.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-              panel.addView(option, new LinearLayout.LayoutParams(-1, dp(48)));
-            }
-            for (Track track : matches.subList(0, Math.min(2, matches.size()))) {
-              LinearLayout r = row(); r.setPadding(0, dp(6), 0, dp(6));
-              Artwork art = new Artwork(MainActivity.this); art.load(track.artwork);
-              r.addView(art, new LinearLayout.LayoutParams(dp(44), dp(48)));
-              TextView t = text(track.title + "\n" + track.artist, 13, INK, false);
-              t.setMaxLines(2); t.setPadding(dp(10),0,0,0); r.addView(t, new LinearLayout.LayoutParams(0,-2,1));
-              r.setOnClickListener(v -> { searchHistory.remember(track); playRadio(track); }); panel.addView(r);
-            }
-          });
-        });
-        ui.postDelayed(pendingSuggestion, 350);
       }
       public void afterTextChanged(android.text.Editable s) {}
     });
@@ -1145,7 +1104,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     LinearLayout outer = body; body = searchResultsBody;
     try {
       if (state.phase()==SearchViewModel.Phase.IDLE||searchText.isBlank()) { renderRecents(body); return; }
-      if(state.phase()==SearchViewModel.Phase.TYPING)return;
+      if(state.phase()==SearchViewModel.Phase.TYPING){renderSearchSuggestions(state);return;}
       if(rankedSearch.isEmpty()&&(!catalogResults.isEmpty()||!podcastResults.isEmpty()))
         rankedSearch=rankSearch(SearchRanker.parse(searchText),catalogResults,podcastResults,searchSignals(),searchFilter.equals("All"));
       if (state.phase()==SearchViewModel.Phase.LOADING&&rankedSearch.isEmpty()) { body.addView(new SkeletonView(this,false)); return; }
@@ -1161,6 +1120,43 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
       }
       if(searchFilter.equals("All"))renderAllSearch();else renderTypedSearch(SearchRanker.Type.from(searchFilter));
     } finally { body = outer; }
+  }
+
+  private void renderSearchSuggestions(SearchViewModel.UiState state) {
+    if(state.suggestions().isEmpty())return;
+    java.util.Set<String> recent=new java.util.HashSet<>();
+    for(String query:searchHistory.queries())recent.add(query.toLowerCase(java.util.Locale.ROOT));
+    for(int index=0;index<state.suggestions().size();index++){
+      String suggestion=state.suggestions().get(index);
+      LinearLayout item=row();item.setGravity(Gravity.CENTER_VERTICAL);item.setMinimumHeight(dp(52));
+      item.setBackground(ripple(Color.TRANSPARENT,0));item.setContentDescription("Search for "+suggestion);
+      boolean isRecent=recent.contains(suggestion.toLowerCase(java.util.Locale.ROOT));
+      AppIcon leading=new AppIcon(this,isRecent?"clock":"search",MUTED,"");
+      leading.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+      item.addView(leading,new LinearLayout.LayoutParams(dp(48),dp(48)));
+      android.text.SpannableString label=new android.text.SpannableString(suggestion);
+      String typed=state.query().trim();
+      if(suggestion.regionMatches(true,0,typed,0,Math.min(typed.length(),suggestion.length()))&&suggestion.length()>typed.length())
+        label.setSpan(new android.text.style.TypefaceSpan("sans-serif-medium"),typed.length(),suggestion.length(),android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+      TextView title=text("",UiStyle.BODY,INK,false);title.setText(label);title.setSingleLine(true);
+      title.setEllipsize(android.text.TextUtils.TruncateAt.END);title.setPadding(dp(UiStyle.SPACE_2),0,dp(UiStyle.SPACE_1),0);
+      item.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+      AppIcon fill=icon("fill","Fill search with "+suggestion,()->{
+        searchQueryView.setText(suggestion);searchQueryView.setSelection(suggestion.length());searchQueryView.requestFocus();
+      });
+      item.addView(fill,new LinearLayout.LayoutParams(dp(48),dp(48)));
+      item.setOnClickListener(v->UiStyle.press(v,()->{
+        searchQueryView.setText(suggestion);searchQueryView.setSelection(suggestion.length());
+        searchHistory.rememberQuery(suggestion);searchViewModel.submit(suggestion);
+        ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(searchQueryView.getWindowToken(),0);
+      }));
+      item.setAlpha(UiStyle.motion(this)?0f:1f);body.addView(item,new LinearLayout.LayoutParams(-1,-2));
+      if(UiStyle.motion(this))item.animate().alpha(1f).setDuration(UiStyle.MOTION_FAST).start();
+      if(index+1<state.suggestions().size()){
+        View divider=new View(this);divider.setBackgroundColor(palette.divider());
+        LinearLayout.LayoutParams line=new LinearLayout.LayoutParams(-1,dp(UiStyle.HAIRLINE));line.setMargins(dp(60),0,0,0);body.addView(divider,line);
+      }
+    }
   }
 
   private void refreshSearchFilterChips(){if(searchFilterChips==null||searchViewModel==null)return;String selected=searchViewModel.state().getValue().filter();searchFilterChips.removeAllViews();for(String filter:List.of("All","Songs","Albums","Artists","Playlists","Podcasts"))searchFilterChips.addView(chip(filter,selected.equals(filter),()->searchViewModel.selectFilter(filter)));}
