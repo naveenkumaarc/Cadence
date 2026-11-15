@@ -2083,6 +2083,7 @@ public final class MainActivity extends Activity {
     playerTitle = text("", UiStyle.TITLE, playerInk, true);
     playerTitle.setSingleLine(true);playerTitle.setEllipsize(android.text.TextUtils.TruncateAt.MARQUEE);
     playerTitle.setMarqueeRepeatLimit(-1);playerTitle.setSelected(true);
+    playerTitle.setHorizontalFadingEdgeEnabled(true);playerTitle.setFadingEdgeLength(dp(UiStyle.SPACE_6));
     playerTitle.setOnClickListener(v -> { Track t = currentTrack(); if (t != null) new CadenceDialogBuilder(this).setTitle(t.title).setMessage(t.artist).setPositiveButton("Close",null).show(); });
     LinearLayout identity = row();
     identity.addView(playerTitle, new LinearLayout.LayoutParams(0, -2, 1));
@@ -2213,7 +2214,7 @@ public final class MainActivity extends Activity {
               dp(24) + i.getSystemWindowInsetLeft(),
               dp(16) + i.getSystemWindowInsetTop(),
               dp(24) + i.getSystemWindowInsetRight(),
-              dp(16) + i.getSystemWindowInsetBottom());
+              dp(24) + i.getSystemWindowInsetBottom());
           return i;
         });
     dialog.setOnDismissListener(
