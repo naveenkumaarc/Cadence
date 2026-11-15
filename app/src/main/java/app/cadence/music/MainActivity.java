@@ -398,6 +398,7 @@ public final class MainActivity extends Activity {
     miniArtist=text("",UiStyle.CAPTION,MUTED,false);miniArtist.setSingleLine(true);miniArtist.setEllipsize(android.text.TextUtils.TruncateAt.END);
     info.addView(miniTitle);info.addView(miniArtist);miniControls.addView(info,new LinearLayout.LayoutParams(0,-2,1));
     mini.setContentDescription("Open now playing");mini.setFocusable(true);mini.setOnClickListener(v->openPlayer());
+    final float[] miniGesture={0,0};mini.setOnTouchListener((v,event)->{if(event.getActionMasked()==android.view.MotionEvent.ACTION_DOWN){miniGesture[0]=event.getX();miniGesture[1]=event.getY();return true;}if(event.getActionMasked()==android.view.MotionEvent.ACTION_UP){float dx=event.getX()-miniGesture[0],dy=event.getY()-miniGesture[1];if(-dy>dp(48)&&Math.abs(dy)>Math.abs(dx)){openPlayer();return true;}if(Math.abs(dx)>dp(56)&&Math.abs(dx)>Math.abs(dy)){if(controller!=null){if(dx<0)controller.seekToNextMediaItem();else controller.seekToPreviousMediaItem();UiStyle.feedback(v);}return true;}v.performClick();return true;}return true;});
     miniNext=new TransportButton(this,TransportButton.Icon.NEXT,INK,Color.TRANSPARENT,"Next track");
     miniNext.setOnClickListener(v->{if(controller!=null)controller.seekToNextMediaItem();});
     miniControls.addView(miniNext,new LinearLayout.LayoutParams(dp(48),dp(48)));
