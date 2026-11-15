@@ -26,6 +26,7 @@ public class CatalogPodcastTest {
     var album = MusicCatalog.parseEntries(fixture("album")).get(0);
     assertEquals("album", album.kind);
     assertEquals("Nobin Paul", album.artist);
+    assertEquals("2023", album.year);
     assertTrue(album.browseId.startsWith("MPRE"));
     var artist = MusicCatalog.parseEntries(fixture("artist")).get(0);
     assertEquals("artist", artist.kind);

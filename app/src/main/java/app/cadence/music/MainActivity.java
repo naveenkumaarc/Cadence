@@ -72,7 +72,7 @@ public final class MainActivity extends Activity {
   private final Handler ui = new Handler(Looper.getMainLooper());
   private final ExecutorService workers = Executors.newFixedThreadPool(4);
   private final ExecutorService discoveryWorkers = Executors.newFixedThreadPool(2);
-  private LinearLayout root, body, mini;
+  private LinearLayout root, body, mini, appBar, navigationShell;
   private TextView status, miniTitle, miniArtist;
   private Artwork miniArt, headerPhoto;
   private GoogleLogin googleLogin;
@@ -352,29 +352,11 @@ public final class MainActivity extends Activity {
                 insets.getSystemWindowInsetBottom());
           return insets;
         });
-    LinearLayout header = row();
-    header.setPadding(dp(UiStyle.SCREEN_INSET), dp(UiStyle.SPACE_1), dp(UiStyle.SPACE_2), dp(UiStyle.SPACE_1));
-    header.setGravity(Gravity.CENTER_VERTICAL);
-    TextView brand = text("Cadence", UiStyle.TITLE, INK, true);
-    brand.setPadding(0, 0, 0, 0);
-    brand.setGravity(Gravity.CENTER_VERTICAL);
-    brand.setIncludeFontPadding(false);
-
-    android.widget.FrameLayout profileTouch = new android.widget.FrameLayout(this);
-    profileTouch.setContentDescription("Open your profile"); profileTouch.setFocusable(true);
-    profileTouch.setBackground(ripple(Color.TRANSPARENT,24)); profileTouch.setOnClickListener(v -> showProfile());
-    headerPhoto = new Artwork(this); headerPhoto.circle(); headerPhoto.setContentDescription("Profile photo");
-    android.widget.FrameLayout.LayoutParams avatarSize = new android.widget.FrameLayout.LayoutParams(dp(30),dp(30),Gravity.CENTER);
-    profileTouch.addView(headerPhoto,avatarSize); header.addView(profileTouch,new LinearLayout.LayoutParams(dp(48),dp(48)));
-    header.addView(brand,new LinearLayout.LayoutParams(-2,dp(48)));
-    header.addView(new View(this),new LinearLayout.LayoutParams(0,1,1)); refreshProfilePhoto();
-    header.addView(
-        icon("queue", "Open queue", this::showQueue),
-        new LinearLayout.LayoutParams(dp(48), dp(48)));
-    header.addView(
-        icon("settings", "Settings", this::settings),
-        new LinearLayout.LayoutParams(dp(48), dp(48)));
-    root.addView(header);
+    appBar = row();
+    appBar.setPadding(dp(UiStyle.SPACE_2), dp(UiStyle.SPACE_1), dp(UiStyle.SPACE_2), dp(UiStyle.SPACE_1));
+    appBar.setGravity(Gravity.CENTER_VERTICAL);
+    root.addView(appBar);
+    configureAppBar(page, "");
     RefreshScrollView scroll = new RefreshScrollView(this); mainScroll=scroll;
     scroll.refreshAction(()->page.equals("Home")||page.equals("Search")&&!searchText.isBlank()&&!searchLoading,()->{if(page.equals("Home"))refreshDiscovery();else refreshSearch();});
     scroll.setFillViewport(true);
@@ -414,7 +396,7 @@ public final class MainActivity extends Activity {
     miniPlay.setOnClickListener(v->togglePlay());miniControls.addView(miniPlay,new LinearLayout.LayoutParams(dp(48),dp(48)));
     mini.addView(miniControls);
     root.addView(mini,new LinearLayout.LayoutParams(-1,-2));mini.setVisibility(View.GONE);
-    LinearLayout navigationShell=column();navigationShell.setBackgroundColor(translucentSurface);
+    navigationShell=column();navigationShell.setBackgroundColor(translucentSurface);
     View navigationDivider=new View(this);navigationDivider.setBackgroundColor(palette.divider());
     navigationShell.addView(navigationDivider,new LinearLayout.LayoutParams(-1,dp(UiStyle.HAIRLINE)));
     navigation = row();
@@ -457,6 +439,47 @@ public final class MainActivity extends Activity {
     palette=UiStyle.palette(this);BG=palette.background();CARD=palette.surface();INK=palette.ink();MUTED=palette.muted();accent=palette.accent();accentText=palette.accentText();
   }
 
+  private void configureAppBar(String screen, String requestedTitle) {
+    if (appBar == null) return;
+    appBar.removeAllViews();
+    boolean detail = screen.equals("Collection") || screen.equals("Playlist") || screen.equals("Show");
+    if (detail) {
+      appBar.addView(icon("back", "Back", this::onBackPressed),
+          new LinearLayout.LayoutParams(dp(UiStyle.TOUCH), dp(UiStyle.TOUCH)));
+      String title = requestedTitle == null || requestedTitle.isBlank()
+          ? screen.equals("Show") ? "Podcast" : screen.equals("Playlist") ? "Playlist" : "Album"
+          : requestedTitle;
+      TextView label = text(title, UiStyle.HEADLINE, INK, true);
+      label.setSingleLine(true);
+      label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+      label.setGravity(Gravity.CENTER_VERTICAL);
+      label.setPadding(dp(UiStyle.SPACE_2), 0, dp(UiStyle.SPACE_2), 0);
+      appBar.addView(label, new LinearLayout.LayoutParams(0, dp(UiStyle.TOUCH), 1));
+      return;
+    }
+
+    android.widget.FrameLayout profileTouch = new android.widget.FrameLayout(this);
+    profileTouch.setContentDescription("Open your profile");
+    profileTouch.setFocusable(true);
+    profileTouch.setBackground(ripple(Color.TRANSPARENT, UiStyle.RADIUS_SHEET));
+    profileTouch.setOnClickListener(v -> showProfile());
+    headerPhoto = new Artwork(this);
+    headerPhoto.circle();
+    headerPhoto.setContentDescription("Profile photo");
+    profileTouch.addView(headerPhoto,
+        new android.widget.FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER));
+    appBar.addView(profileTouch, new LinearLayout.LayoutParams(dp(UiStyle.TOUCH), dp(UiStyle.TOUCH)));
+    TextView brand = text("Cadence", UiStyle.TITLE, INK, true);
+    brand.setGravity(Gravity.CENTER_VERTICAL);
+    appBar.addView(brand, new LinearLayout.LayoutParams(-2, dp(UiStyle.TOUCH)));
+    appBar.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+    appBar.addView(icon("queue", "Open queue", this::showQueue),
+        new LinearLayout.LayoutParams(dp(UiStyle.TOUCH), dp(UiStyle.TOUCH)));
+    appBar.addView(icon("settings", "Settings", this::settings),
+        new LinearLayout.LayoutParams(dp(UiStyle.TOUCH), dp(UiStyle.TOUCH)));
+    refreshProfilePhoto();
+  }
+
   private AppIcon icon(String name, String label, Runnable action) {
     AppIcon icon = new AppIcon(this, name, INK, label);
     icon.setOnClickListener(v -> UiStyle.press(v, action));
@@ -484,6 +507,7 @@ public final class MainActivity extends Activity {
 
   private void clear(String name, String subtitle) {
     boolean changed=!page.equals(name);page = name;libraryGrid=null;libraryList=null;
+    configureAppBar(name, subtitle);
     if(changed&&status!=null&&(status.getText().toString().equals("Loading collection…")||status.getText().toString().equals("Loading podcast…"))){status.setText("");status.setVisibility(View.GONE);}
     if(mainScroll!=null&&changed)mainScroll.scrollTo(0,0);
     body.animate().cancel();body.setAlpha(1);body.setTranslationY(0);
@@ -837,7 +861,7 @@ public final class MainActivity extends Activity {
   private void openCollection(MusicCatalog.Entry entry) {
     rememberScreen();collectionEntry=entry;
     searchHistory.remember(entry);
-    clear("Collection", "");
+    clear("Collection", entry.title);
     body.addView(text(entry.title, 30, INK, true));
     gap(12);
     body.addView(new SkeletonView(this,false));
@@ -847,46 +871,149 @@ public final class MainActivity extends Activity {
         () -> entry.kind.equals("artist") ? MusicCatalog.browse(entry.browseId) : MusicCatalog.browseAll(entry.browseId),
         items -> {
           if (generation != searchGeneration || !page.equals("Collection")) return;
-          clear("Collection", "");
-          Artwork art = new Artwork(this);
-          art.load(entry.artwork);
-          if (entry.kind.equals("artist")) art.circle();
-          LinearLayout center = row();
-          center.setGravity(Gravity.CENTER);
-          center.addView(art, new LinearLayout.LayoutParams(dp(210), dp(210)));
-          body.addView(center);
-          gap(22);
-          body.addView(text(entry.title, 30, INK, true));
-          gap(6);
-          body.addView(
-              text(entry.kind.equals("artist") ? "Artist" : entry.artist, 14, MUTED, false));
-          gap(18);
-          List<Track> songs = new ArrayList<>();
-          MusicCatalog.Shelf albums = new MusicCatalog.Shelf("Albums");
-          for (MusicCatalog.Entry e : items)
-            if (e.track != null) {
-              if (e.track.artwork.isEmpty()) e.track.artwork = entry.artwork;
-              if (e.track.artist.isEmpty()) e.track.artist = entry.artist;
-              songs.add(e.track);
-            } else if (e.kind.equals("album")) albums.entries.add(e);
-          if (!songs.isEmpty()) {
-            body.addView(
-                button("Play", true, () -> play(songs.get(0), songs)),
-                new LinearLayout.LayoutParams(-1, dp(50)));
-            gap(8);
-            body.addView(button("Shuffle play", false, () -> playPlaylist(songs, true)));
-            if (!entry.kind.equals("artist")) body.addView(button("Add " + (entry.kind.equals("album") ? "album" : "playlist") + " to library", false, () -> {
-              Library.Playlist saved = new Library.Playlist(entry.title);
-              saved.origin = entry.browseId.startsWith("VL") ? "https://music.youtube.com/playlist?list=" + entry.browseId.substring(2) : "";
-              saved.tracks.addAll(songs); library.playlists.add(saved); save(); toast("Saved " + songs.size() + " songs to your library");
-            }));
-            gap(18);
-            appendCollectionTracks(songs, 0);
-          }
-          if (!albums.entries.isEmpty()) shelf(albums);
-          if (songs.isEmpty() && albums.entries.isEmpty())
-            body.addView(button("Find songs", true, () -> runMusicSearch(entry.title)));
+          renderCollection(entry, items);
         });
+  }
+
+  private void renderCollection(MusicCatalog.Entry entry, List<MusicCatalog.Entry> items) {
+    clear("Collection", entry.title);
+    List<Track> songs = new ArrayList<>();
+    MusicCatalog.Shelf albums = new MusicCatalog.Shelf("Albums");
+    for (MusicCatalog.Entry item : items)
+      if (item.track != null) {
+        if (item.track.artwork.isEmpty()) item.track.artwork = entry.artwork;
+        if (item.track.artist.isEmpty()) item.track.artist = entry.artist;
+        songs.add(item.track);
+      } else if (item.kind.equals("album")) albums.entries.add(item);
+
+    long seconds = songs.stream().mapToLong(track -> Math.max(0, track.durationSeconds)).sum();
+    String count = songs.size() + (songs.size() == 1 ? " song" : " songs");
+    String metadata = String.join(" · ", java.util.stream.Stream.of(
+        entry.year, count, collectionDuration(seconds)).filter(value -> !value.isBlank()).toList());
+    detailHeader(entry.artwork, entry.kind.equals("artist"), entry.title,
+        entry.kind.equals("artist") ? "Artist" : entry.artist, metadata);
+
+    if (!songs.isEmpty()) {
+      if (entry.kind.equals("artist")) {
+        LinearLayout artistActions = row();
+        Button play = button("Play", true, () -> play(songs.get(0), songs));
+        Button shuffle = button("Shuffle play", false, () -> playPlaylist(songs, true));
+        LinearLayout.LayoutParams first = new LinearLayout.LayoutParams(0, -2, 1);
+        first.setMargins(0, 0, dp(UiStyle.SPACE_3), 0);
+        artistActions.addView(play, first);
+        artistActions.addView(shuffle, new LinearLayout.LayoutParams(0, -2, 1));
+        body.addView(artistActions, new LinearLayout.LayoutParams(-1, -2));
+      } else {
+        addCollectionActions(entry, songs);
+      }
+      gap(UiStyle.SPACE_6);
+      appendCollectionTracks(songs, 0);
+    }
+    if (!albums.entries.isEmpty()) shelf(albums);
+    if (songs.isEmpty() && albums.entries.isEmpty())
+      body.addView(button("Find songs", true, () -> runMusicSearch(entry.title)));
+  }
+
+  private void detailHeader(String artwork, boolean circle, String title, String subtitle,
+      String metadata) {
+    gap(UiStyle.SPACE_2);
+    Artwork art = new Artwork(this);
+    art.load(artwork);
+    if (circle) art.circle();
+    art.setContentDescription(title + " artwork");
+    LinearLayout center = row();
+    center.setGravity(Gravity.CENTER);
+    int artSize = Math.min(220, Math.max(152,
+        getResources().getConfiguration().screenWidthDp - UiStyle.SCREEN_INSET * 4));
+    center.addView(art, new LinearLayout.LayoutParams(dp(artSize), dp(artSize)));
+    body.addView(center);
+    gap(UiStyle.SPACE_6);
+    TextView heading = text(title, UiStyle.TITLE_LARGE, INK, true);
+    heading.setGravity(Gravity.CENTER);
+    heading.setMaxLines(3);
+    heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    body.addView(heading);
+    if (subtitle != null && !subtitle.isBlank()) {
+      TextView byline = text(subtitle, UiStyle.SUBHEAD, MUTED, false);
+      byline.setGravity(Gravity.CENTER);
+      byline.setMaxLines(2);
+      byline.setPadding(0, dp(UiStyle.SPACE_2), 0, 0);
+      body.addView(byline);
+    }
+    if (metadata != null && !metadata.isBlank()) {
+      TextView facts = text(metadata, UiStyle.FOOTNOTE, MUTED, false);
+      facts.setGravity(Gravity.CENTER);
+      facts.setPadding(0, dp(UiStyle.SPACE_2), 0, dp(UiStyle.SPACE_6));
+      body.addView(facts);
+    } else gap(UiStyle.SPACE_6);
+  }
+
+  private void addCollectionActions(MusicCatalog.Entry entry, List<Track> songs) {
+    DetailActionsLayout actions = new DetailActionsLayout(this);
+    Button play = button("Play", true, () -> play(songs.get(0), songs));
+    Button shuffle = button("Shuffle play", false, () -> playPlaylist(songs, true));
+    play.setMaxLines(2);
+    shuffle.setMaxLines(2);
+    actions.addView(play);
+    actions.addView(shuffle);
+    AppIcon save = icon("plus", "Add album to library", () -> {});
+    save.setOnClickListener(v -> UiStyle.press(v, () -> toggleCollectionSaved(entry, songs, save)));
+    styleCollectionSave(save, savedCollection(entry, songs) != null);
+    actions.addView(save);
+    AppIcon download = icon("download", "Download album", () -> downloadCollection(entry, songs));
+    actions.addView(download);
+    body.addView(actions, new LinearLayout.LayoutParams(-1, -2));
+  }
+
+  private Library.Playlist savedCollection(MusicCatalog.Entry entry, List<Track> songs) {
+    java.util.Set<String> sources = songs.stream().map(track -> track.sourceUrl)
+        .filter(source -> !source.isBlank()).collect(java.util.stream.Collectors.toSet());
+    if (sources.isEmpty()) return null;
+    return library.playlists.stream().filter(playlist -> playlist.name.equals(entry.title)
+        && playlist.tracks.size() == songs.size()
+        && playlist.tracks.stream().map(track -> track.sourceUrl).collect(
+            java.util.stream.Collectors.toSet()).equals(sources)).findFirst().orElse(null);
+  }
+
+  private void toggleCollectionSaved(MusicCatalog.Entry entry, List<Track> songs, AppIcon control) {
+    Library.Playlist existing = savedCollection(entry, songs);
+    if (existing != null) {
+      library.playlists.remove(existing);
+      save();
+      styleCollectionSave(control, false);
+      toast("Removed from your library");
+      return;
+    }
+    Library.Playlist saved = new Library.Playlist(entry.title);
+    saved.origin = entry.browseId.startsWith("VL")
+        ? "https://music.youtube.com/playlist?list=" + entry.browseId.substring(2) : "";
+    saved.tracks.addAll(songs);
+    library.playlists.add(saved);
+    save();
+    styleCollectionSave(control, true);
+    toast("Saved " + songs.size() + " songs to your library");
+  }
+
+  private void styleCollectionSave(AppIcon control, boolean saved) {
+    control.symbol(saved ? "check" : "plus");
+    control.colour(saved ? accentText : INK);
+    control.setContentDescription(saved ? "Remove album from library" : "Add album to library");
+    control.setBackground(ripple(saved ? palette.accentContainer() : Color.TRANSPARENT,
+        UiStyle.RADIUS_PILL));
+  }
+
+  private void downloadCollection(MusicCatalog.Entry entry, List<Track> songs) {
+    Library.Playlist download = new Library.Playlist(entry.title);
+    download.id = "catalog:" + Integer.toHexString(entry.browseId.hashCode());
+    download.tracks.addAll(songs);
+    playlistDownloadAction(download);
+  }
+
+  private static String collectionDuration(long seconds) {
+    if (seconds <= 0) return "";
+    if (seconds < 3600) return (seconds + 59) / 60 + " min";
+    long hours = seconds / 3600, minutes = (seconds % 3600 + 59) / 60;
+    return hours + " hr" + (minutes > 0 ? " " + minutes + " min" : "");
   }
 
   private void runMusicSearch(String query) {
@@ -1255,12 +1382,12 @@ public final class MainActivity extends Activity {
     if(!page.equals("Playlist"))rememberScreen();
     Library.Playlist playlist = resolvePlaylist(requested);
     shownPlaylist = playlist;
-    clear("Playlist", playlist.origin.isEmpty() ? "Your collection" : "Imported playlist");
-    if(!playlist.tracks.isEmpty()){Artwork cover=new Artwork(this);cover.load(playlist.tracks.get(0).artwork);cover.setContentDescription(playlist.name+" artwork");LinearLayout hero=row();hero.setGravity(Gravity.CENTER);hero.addView(cover,new LinearLayout.LayoutParams(dp(196),dp(196)));body.addView(hero);gap(22);}
-    body.addView(text(playlist.name, 32, INK, true));
-    gap(8);
-    body.addView(text(playlist.tracks.size() + " songs", 13, MUTED, false));
-    gap(16);
+    clear("Playlist", playlist.name);
+    long playlistSeconds=playlist.tracks.stream().mapToLong(track->Math.max(0,track.durationSeconds)).sum();
+    String playlistCount=playlist.tracks.size()+(playlist.tracks.size()==1?" song":" songs");
+    detailHeader(playlist.tracks.isEmpty()?"":playlist.tracks.get(0).artwork,false,playlist.name,
+        playlist.origin.isEmpty()?"Your playlist":"Imported playlist",
+        playlistCount+(playlistSeconds>0?" · "+collectionDuration(playlistSeconds):""));
     if (!playlist.origin.isEmpty()) {
       body.addView(
           button(
@@ -1277,8 +1404,10 @@ public final class MainActivity extends Activity {
     }
     LinearLayout playActions = row();
     Library.Playlist displayed = playlist;
-    playActions.addView(button("Play all", true, () -> playPlaylist(displayed.tracks, false)), new LinearLayout.LayoutParams(0, dp(50), 1));
-    playActions.addView(button("Shuffle play", false, () -> playPlaylist(displayed.tracks, true)), new LinearLayout.LayoutParams(0, dp(50), 1));
+    LinearLayout.LayoutParams playSize=new LinearLayout.LayoutParams(0, -2, 1);
+    playSize.setMargins(0,0,dp(UiStyle.SPACE_3),0);
+    playActions.addView(button("Play all", true, () -> playPlaylist(displayed.tracks, false)), playSize);
+    playActions.addView(button("Shuffle play", false, () -> playPlaylist(displayed.tracks, true)), new LinearLayout.LayoutParams(0, -2, 1));
     body.addView(playActions);
     gap(10);
     playlistDownload=button("Download all",false,()->playlistDownloadAction(displayed));
@@ -2416,26 +2545,23 @@ public final class MainActivity extends Activity {
   private void showPodcast(Podcasts.Show show) {
     if(!page.equals("Show"))rememberScreen();
     shownShow = show;
-    clear("Show", "");
+    clear("Show", show.title);
     downloadButtons.clear();
-    Artwork art = new Artwork(this);
-    art.load(show.artwork);
-    LinearLayout hero = row();
-    hero.setGravity(Gravity.CENTER);
-    hero.addView(art, new LinearLayout.LayoutParams(dp(190), dp(190)));
-    body.addView(hero);
-    gap(22);
-    body.addView(text(show.title, 29, INK, true));
-    gap(5);
-    body.addView(text(show.author, 14, MUTED, false));
-    gap(16);
+    long episodeSeconds=show.episodes.stream().mapToLong(episode->Math.max(0,episode.duration)).sum();
+    String episodeCount=show.episodes.size()+(show.episodes.size()==1?" episode":" episodes");
+    detailHeader(show.artwork,false,show.title,show.author,
+        episodeCount+(episodeSeconds>0?" · "+collectionDuration(episodeSeconds):""));
     LinearLayout actions = row();
+    LinearLayout.LayoutParams podcastActionSize=new LinearLayout.LayoutParams(0,dp(48),1);
+    podcastActionSize.setMargins(0,0,dp(UiStyle.SPACE_3),0);
     actions.addView(podcastAction("refresh","Refresh",false,() -> work(
         "Refreshing episodes…",() -> Podcasts.feed(show.feedUrl),fresh -> {
           try {if (podcasts.subscribed(show.feedUrl)) podcasts.put(fresh); else podcasts.preview(fresh);showPodcast(fresh);}
           catch (Exception e) {error("Saving podcast", e);}
-        })),new LinearLayout.LayoutParams(0,dp(48),1));
-    actions.addView(podcastAction(null,"Speed",false,this::chooseSpeed),new LinearLayout.LayoutParams(0,dp(48),1));
+        })),podcastActionSize);
+    LinearLayout.LayoutParams speedSize=new LinearLayout.LayoutParams(0,dp(48),1);
+    speedSize.setMargins(0,0,dp(UiStyle.SPACE_3),0);
+    actions.addView(podcastAction(null,"Speed",false,this::chooseSpeed),speedSize);
     boolean subscribed = podcasts.subscribed(show.feedUrl);
     actions.addView(podcastAction(subscribed?"check":null,subscribed?"Subscribed":"Subscribe",subscribed,() -> {
       try {

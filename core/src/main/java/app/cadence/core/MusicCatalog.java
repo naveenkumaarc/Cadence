@@ -11,7 +11,8 @@ public final class MusicCatalog {
   public static final String[] LANGUAGES = {"Tamil", "Telugu", "Malayalam", "English"};
 
   public static final class Entry {
-    public String title = "", artist = "", artwork = "", browseId = "", kind = "playlist";
+    public String title = "", artist = "", artwork = "", browseId = "", kind = "playlist",
+        year = "";
     public Track track;
   }
 
@@ -396,6 +397,10 @@ public final class MusicCatalog {
     e.kind =
         pageType.contains("ARTIST") ? "artist" : pageType.contains("ALBUM") ? "album" : "playlist";
     e.artwork = artwork(o.has("thumbnail") ? o.get("thumbnail") : o.get("thumbnailRenderer"));
+    for (JsonElement run : artists) {
+      String part = string(run.getAsJsonObject().get("text")).trim();
+      if (part.matches("(?:19|20)\\d{2}")) e.year = part;
+    }
     StringBuilder a = new StringBuilder();
     if (!artists.isEmpty()
         && Set.of("Song", "Album", "Single", "EP", "Artist", "Playlist")

@@ -137,6 +137,10 @@ final class AppIcon extends View {
         canvas.drawLine(14, 24, 33, 24, p);
         path.moveTo(26, 17); path.lineTo(33, 24); path.lineTo(26, 31); canvas.drawPath(path, p);
       }
+      case "back" -> {
+        canvas.drawLine(14, 24, 34, 24, p);
+        path.moveTo(21, 17); path.lineTo(14, 24); path.lineTo(21, 31); canvas.drawPath(path, p);
+      }
       case "chevron" -> {
         path.moveTo(21, 16); path.lineTo(29, 24); path.lineTo(21, 32); canvas.drawPath(path, p);
       }
