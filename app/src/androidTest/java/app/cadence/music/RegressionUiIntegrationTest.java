@@ -16,6 +16,8 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
+import app.cadence.core.MusicCatalog;
+import app.cadence.core.SearchRanker;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -37,10 +39,14 @@ public final class RegressionUiIntegrationTest {
   private List<Button> buttons(View root){List<Button> found=new ArrayList<>();collectButtons(root,found);return found;}
   private void collectButtons(View view,List<Button> found){if(view instanceof Button button)found.add(button);if(view instanceof ViewGroup group)for(int index=0;index<group.getChildCount();index++)collectButtons(group.getChildAt(index),found);}
   private Button button(String label){return buttons(activity.getWindow().getDecorView()).stream().filter(candidate->label.contentEquals(candidate.getText())).findFirst().orElse(null);}
+  private View text(View view,String label){if(view instanceof android.widget.TextView value&&!(view instanceof EditText)&&label.contentEquals(value.getText()))return view;if(view instanceof ViewGroup group)for(int index=0;index<group.getChildCount();index++){View found=text(group.getChildAt(index),label);if(found!=null)return found;}return null;}
+  private SearchViewModel.Payload payload(String query){MusicCatalog.Entry entry=new MusicCatalog.Entry();entry.kind="song";entry.title=query;entry.artist="Ilaiyaraaja";SearchRanker.Document document=new SearchRanker.Document(query,SearchRanker.Type.SONG,query,entry.artist,"","","","",0,false,false,false,false);return new SearchViewModel.Payload(List.of(entry),List.of(),List.of(new SearchViewModel.Item(new SearchRanker.Ranked(document,100,true),entry,null)),"");}
+  private void fakeSearch()throws Exception{SearchViewModel model=(SearchViewModel)field("searchViewModel");model.onQueryChanged("");model.attach(new SearchViewModel.Repository(){public SearchViewModel.Payload search(String query,String filter){return payload(query);}public List<String> suggestions(String query){return List.of(query+" songs",query+" hits");}});}
   @Before public void launch(){activity=(MainActivity)instrumentation.startActivitySync(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}
   @After public void close(){if(activity!=null)main(activity::finish);}
 
   @Test public void multiWordSearchKeepsOneFocusedImeOwner()throws Exception{
+    fakeSearch();
     main(()->call("showSearch"));
     EditText query=(EditText)field("searchQueryView");
     assertNotNull(query);
@@ -59,6 +65,13 @@ public final class RegressionUiIntegrationTest {
     assertEquals(phrase,query.getText().toString());
     assertSame(query,field("searchQueryView"));assertTrue(query.hasFocus());
     assertTrue(((InputMethodManager)context.getSystemService(Context.INPUT_METHOD_SERVICE)).isActive(query));
+    for(int attempt=0;attempt<50&&text(activity.getWindow().getDecorView(),phrase)==null;attempt++)Thread.sleep(50);
+    assertNotNull("Results must render without leaving Search",text(activity.getWindow().getDecorView(),phrase));
+    androidx.core.view.WindowInsetsCompat insets=androidx.core.view.ViewCompat.getRootWindowInsets(query);assertNotNull(insets);
+    if(insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())){
+      LinearLayout results=(LinearLayout)field("searchResultsBody");assertTrue(results.getPaddingBottom()>0);
+      assertEquals(View.GONE,((View)field("navigationShell")).getVisibility());
+    }
   }
 
   @Test public void libraryChipTapSwipeAndRestoreUseOneSelection()throws Exception{

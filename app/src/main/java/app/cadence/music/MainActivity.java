@@ -148,6 +148,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
   private LinearLayout searchResultsBody;
   private LinearLayout searchFilterChips;
   private EditText searchQueryView;
+  private TextView searchLargeTitle,searchSubtitle;
   private SearchViewModel searchViewModel;
   private Artwork playerArt;
   private SeekBar playerSeek;
@@ -366,11 +367,9 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
               androidx.core.view.WindowInsetsCompat.Type.ime());
           boolean keyboard=compat.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime());
           v.setPadding(bars.left,bars.top,bars.right,bars.bottom);
-          if(mainScroll!=null)mainScroll.setPadding(0,0,0,
-              page.equals("Search")&&keyboard?Math.max(0,ime.bottom-bars.bottom):0);
-          if(mini!=null)mini.setVisibility(keyboard?View.GONE:
-              (controller!=null&&controller.getCurrentMediaItem()!=null?View.VISIBLE:View.GONE));
-          if(navigationShell!=null)navigationShell.setVisibility(keyboard?View.GONE:View.VISIBLE);
+          if(mainScroll!=null)mainScroll.setPadding(0,0,0,0);
+          if(searchResultsBody!=null){int bottom=page.equals("Search")&&keyboard?Math.max(0,ime.bottom-bars.bottom)+dp(UiStyle.SPACE_4):0;searchResultsBody.setPadding(0,0,0,bottom);searchResultsBody.requestLayout();}
+          updateKeyboardChrome(keyboard);
           return insets;
         });
     appBar = row();
@@ -520,6 +519,8 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
   }
 
   private void navigate(String target) {
+    if(page.equals("Search")&&searchViewModel!=null&&mainScroll!=null)
+      searchViewModel.setScrollPosition(mainScroll.getScrollY());
     if(!restoringScreen)screenHistory.clear();
     searchGeneration++;
     shownPlaylist = null;
@@ -706,12 +707,14 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     query.setOnEditorActionListener((v,id,event) -> {
       if (id == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) { submit.run(); return true; } return false;
     });
+    query.setOnFocusChangeListener((view,focused)->updateSearchHeader());
     query.addTextChangedListener(new android.text.TextWatcher() {
       public void beforeTextChanged(CharSequence s,int start,int count,int after) {}
       public void onTextChanged(CharSequence value,int start,int before,int count) {
         clearQuery.setVisibility(value.length()==0?View.GONE:View.VISIBLE);
         if (searchPage) {
           searchViewModel.onQueryChanged(value.toString());
+          updateSearchHeader();
         }
       }
       public void afterTextChanged(android.text.Editable s) {}
@@ -1082,7 +1085,9 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     SearchViewModel.UiState state=searchViewModel.state().getValue();
     searchText=state.query();searchFilter=state.filter();
     clear("Search", "");
+    int headerStart=body.getChildCount();
     largeTitle("Search", "Find music, artists, playlists and podcasts.");
+    searchLargeTitle=(TextView)body.getChildAt(headerStart);searchSubtitle=(TextView)body.getChildAt(headerStart+1);
     searchBox("Search", state.query(), true);
     gap(16);
     android.widget.HorizontalScrollView sc = new android.widget.HorizontalScrollView(this);
@@ -1090,7 +1095,35 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     searchFilterChips = row();refreshSearchFilterChips();
     sc.addView(searchFilterChips);addBleedingHorizontal(sc,UiStyle.SPACE_2);gap(8);
     searchResultsBody = column(); body.addView(searchResultsBody);
+    updateSearchHeader();
     renderSearchResults();
+    mainScroll.post(()->mainScroll.scrollTo(0,searchViewModel.state().getValue().scrollPosition()));
+    root.requestApplyInsets();
+  }
+
+  private void updateSearchHeader(){
+    if(searchLargeTitle==null||searchSubtitle==null||searchQueryView==null)return;
+    boolean collapsed=searchQueryView.hasFocus()||searchQueryView.length()>0;
+    for(View header:List.of(searchLargeTitle,searchSubtitle)){
+      if(collapsed&&header.getVisibility()==View.VISIBLE){
+        if(UiStyle.motion(this))header.animate().alpha(0f).setDuration(UiStyle.MOTION_FAST).withEndAction(()->header.setVisibility(View.GONE)).start();
+        else header.setVisibility(View.GONE);
+      } else if(!collapsed&&header.getVisibility()!=View.VISIBLE){
+        header.setVisibility(View.VISIBLE);header.setAlpha(UiStyle.motion(this)?0f:1f);
+        if(UiStyle.motion(this))header.animate().alpha(1f).setDuration(UiStyle.MOTION_FAST).start();
+      }
+    }
+  }
+
+  private void updateKeyboardChrome(boolean keyboard){
+    if(navigationShell!=null){
+      if(keyboard){navigationShell.animate().cancel();navigationShell.setVisibility(View.GONE);}
+      else if(navigationShell.getVisibility()!=View.VISIBLE){navigationShell.setVisibility(View.VISIBLE);navigationShell.setAlpha(UiStyle.motion(this)?0f:1f);if(UiStyle.motion(this))navigationShell.animate().alpha(1f).setDuration(UiStyle.MOTION_FAST).start();}
+    }
+    if(mini!=null){boolean wanted=!keyboard&&controller!=null&&controller.getCurrentMediaItem()!=null;
+      if(!wanted){mini.animate().cancel();mini.setVisibility(View.GONE);}
+      else if(mini.getVisibility()!=View.VISIBLE){mini.setVisibility(View.VISIBLE);mini.setAlpha(UiStyle.motion(this)?0f:1f);if(UiStyle.motion(this))mini.animate().alpha(1f).setDuration(UiStyle.MOTION_FAST).start();}
+    }
   }
 
   private void renderSearchResults() {
@@ -3870,7 +3903,7 @@ public final class MainActivity extends androidx.activity.ComponentActivity {
     Bundle saved=captureScreen();screenHistory.add(saved);
   }
   private Bundle captureScreen() {
-    Bundle out=new Bundle();SearchViewModel.UiState search=searchViewModel.state().getValue();out.putString("page",page);out.putString("searchText",search.query());out.putString("searchFilter",search.filter());out.putInt("searchScroll",search.scrollPosition());out.putString("homeTab",homeTab);out.putString("libraryFilter",libraryFilter);
+    Bundle out=new Bundle();if(page.equals("Search")&&mainScroll!=null)searchViewModel.setScrollPosition(mainScroll.getScrollY());SearchViewModel.UiState search=searchViewModel.state().getValue();out.putString("page",page);out.putString("searchText",search.query());out.putString("searchFilter",search.filter());out.putInt("searchScroll",search.scrollPosition());out.putString("homeTab",homeTab);out.putString("libraryFilter",libraryFilter);
     out.putInt("scroll",mainScroll==null?0:mainScroll.getScrollY());
     if(collectionEntry!=null)out.putString("collection",new com.google.gson.Gson().toJson(collectionEntry));
     if(shownPlaylist!=null)out.putString("playlist",shownPlaylist.id);if(shownShow!=null)out.putString("feed",shownShow.feedUrl);return out;
