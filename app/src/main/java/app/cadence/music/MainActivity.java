@@ -1,7 +1,6 @@
 package app.cadence.music;
 
 import android.Manifest;
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.ClipData;
@@ -60,7 +59,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
-public final class MainActivity extends Activity {
+public final class MainActivity extends androidx.activity.ComponentActivity {
   private UiStyle.Palette palette;
   private int BG, CARD, INK, MUTED, accent, accentText;
   private RefreshScrollView mainScroll;
@@ -132,14 +131,11 @@ public final class MainActivity extends Activity {
   private final ArrayList<Bundle> screenHistory=new ArrayList<>();
   private boolean restoringScreen;
   private List<Podcasts.Show> podcastResults=new ArrayList<>();
-  private List<SearchItem> rankedSearch=new ArrayList<>();
+  private List<SearchViewModel.Item> rankedSearch=new ArrayList<>();
   private final java.util.LinkedHashMap<String,CachedSearch> searchCache=new java.util.LinkedHashMap<>();
-  private record SearchItem(SearchRanker.Ranked ranking,MusicCatalog.Entry music,Podcasts.Show podcast) {}
   private record SearchSignals(java.util.Set<String> liked,java.util.Set<String> downloaded,
       java.util.Set<String> recent,java.util.Set<String> subscribed,String preferredLanguage) {}
-  private record SearchPayload(List<MusicCatalog.Entry> music,List<Podcasts.Show> podcasts,
-      List<SearchItem> ranked,String error) {}
-  private record CachedSearch(long at,SearchPayload payload) {}
+  private record CachedSearch(long at,SearchViewModel.Payload payload) {}
   private final java.util.Map<String, DownloadRow> downloadRows=new java.util.LinkedHashMap<>();
   private Button allDownloadsToggle;
   private record DownloadRow(Track track,TextView label,ProgressBar bar,Button toggle) {}
@@ -158,6 +154,7 @@ public final class MainActivity extends Activity {
   private LinearLayout searchResultsBody;
   private LinearLayout searchFilterChips;
   private EditText searchQueryView;
+  private SearchViewModel searchViewModel;
   private Artwork playerArt;
   private SeekBar playerSeek;
   private boolean playerSeeking;
@@ -228,7 +225,30 @@ public final class MainActivity extends Activity {
       return;
     }
     language = Preferences.get(this).getString("homeLanguage", "All");
+    searchViewModel = new androidx.lifecycle.ViewModelProvider(this).get(SearchViewModel.class);
+    searchViewModel.attach(new SearchViewModel.Repository() {
+      public SearchViewModel.Payload search(String query,String filter)throws Exception {
+        SearchRanker.Query parsed=SearchRanker.parse(query);
+        String key=filter+"\n"+parsed.normalized();CachedSearch cached=searchCache.get(key);
+        if(cached!=null&&System.currentTimeMillis()-cached.at()<120_000)return cached.payload();
+        SearchViewModel.Payload result=fetchSearch(parsed,filter,searchSignals());
+        searchCache.put(key,new CachedSearch(System.currentTimeMillis(),result));
+        while(searchCache.size()>8)searchCache.remove(searchCache.keySet().iterator().next());
+        return result;
+      }
+      public List<String> suggestions(String query)throws Exception {
+        return MusicCatalog.suggestions(query);
+      }
+    });
     buildShell();
+    searchViewModel.lifecycleState().observe(this,state->{
+      searchText=state.query();searchFilter=state.filter();
+      searchLoading=state.phase()==SearchViewModel.Phase.LOADING;searchError=state.message();
+      catalogResults=new ArrayList<>(state.payload().music());
+      podcastResults=new ArrayList<>(state.payload().podcasts());
+      rankedSearch=new ArrayList<>(state.payload().ranked());
+      if(page.equals("Search")){if(searchResultsBody!=null)searchResultsBody.setVisibility(View.VISIBLE);refreshSearchFilterChips();renderSearchResults();}
+    });
     restoringScreen=true;try{restoreScreen(savedInstanceState);}finally{restoringScreen=false;}
     handleShare(getIntent());
     getPreferences(MODE_PRIVATE).edit().remove("spotifyClientId").remove("accent").apply();
@@ -687,7 +707,8 @@ public final class MainActivity extends Activity {
       searchText = value;
       ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(query.getWindowToken(), 0);
       if (value.startsWith("http")) openYouTubeLink(value);
-      else { if (!searchPage) searchFilter = "All"; showSearch(); searchMusic(); }
+      else if(searchPage)searchViewModel.submit(value);
+      else {searchViewModel.startNewSearch(value);showSearch();}
     };
     submitIcon.setOnClickListener(v -> submit.run());
     query.setOnEditorActionListener((v,id,event) -> {
@@ -698,17 +719,7 @@ public final class MainActivity extends Activity {
       public void onTextChanged(CharSequence value,int start,int before,int count) {
         clearQuery.setVisibility(value.length()==0?View.GONE:View.VISIBLE);
         if (searchPage) {
-          searchText = value.toString();
-          if(pendingSearch!=null)ui.removeCallbacks(pendingSearch);
-          if(searchTask!=null)searchTask.cancel(true);
-          String typed=value.toString().trim();
-          if(typed.length()<2) {
-            searchGeneration++;searchLoading=false;searchError="";catalogResults.clear();podcastResults.clear();rankedSearch.clear();
-            if(searchResultsBody!=null)searchResultsBody.setVisibility(View.GONE);
-          } else {
-            searchGeneration++;searchLoading=false;
-            pendingSearch=MainActivity.this::searchMusic;ui.postDelayed(pendingSearch,300);
-          }
+          searchViewModel.onQueryChanged(value.toString());
         }
         int generation = ++suggestionGeneration;
         if (pendingSuggestion != null) ui.removeCallbacks(pendingSuggestion);
@@ -1033,42 +1044,18 @@ public final class MainActivity extends Activity {
   }
 
   private void runMusicSearch(String query) {
-    searchText = query;
-    searchFilter = "All";
-    catalogResults.clear();
+    searchViewModel.startNewSearch(query);
     showSearch();
-    searchMusic();
   }
 
-  private void refreshSearch(){searchCache.remove(searchFilter+"\n"+SearchRanker.parse(searchText).normalized());searchMusic();}
+  private void refreshSearch(){SearchViewModel.UiState state=searchViewModel.state().getValue();searchCache.remove(state.filter()+"\n"+SearchRanker.parse(state.query()).normalized());searchViewModel.retry();}
 
   private void searchMusic() {
-    String term=searchText.trim();if(term.length()<2)return;
-    if(pendingSearch!=null)ui.removeCallbacks(pendingSearch);if(searchTask!=null)searchTask.cancel(true);
-    int generation=++searchGeneration;String filter=searchFilter;SearchRanker.Query query=SearchRanker.parse(term);
-    String cacheKey=filter+"\n"+query.normalized();CachedSearch cached=searchCache.get(cacheKey);
-    if(cached!=null&&System.currentTimeMillis()-cached.at()<120_000){applySearch(generation,cached.payload());return;}
-    searchLoading=true;searchError="";showSearch();SearchSignals signals=searchSignals();
-    searchTask=workers.submit(()->{
-      SearchPayload payload;
-      try{payload=fetchSearch(query,filter,signals);}catch(InterruptedException cancelled){Thread.currentThread().interrupt();return;}
-      catch(Exception failure){payload=new SearchPayload(List.of(),List.of(),List.of(),"Search is unavailable. Check your connection and try again.");}
-      SearchPayload result=payload;ui.post(()->{
-        if(destroyed||generation!=searchGeneration||!page.equals("Search"))return;
-        searchCache.put(cacheKey,new CachedSearch(System.currentTimeMillis(),result));
-        while(searchCache.size()>8)searchCache.remove(searchCache.keySet().iterator().next());
-        applySearch(generation,result);
-      });
-    });
+    SearchViewModel.UiState state=searchViewModel.state().getValue();
+    if(state.query().trim().length()>=2)searchViewModel.submit(state.query());
   }
 
-  private void applySearch(int generation,SearchPayload payload) {
-    if(generation!=searchGeneration)return;searchLoading=false;searchError=payload.error();
-    catalogResults=new ArrayList<>(payload.music());podcastResults=new ArrayList<>(payload.podcasts());
-    rankedSearch=new ArrayList<>(payload.ranked());showSearch();
-  }
-
-  private SearchPayload fetchSearch(SearchRanker.Query query,String filter,SearchSignals signals)throws Exception {
+  private SearchViewModel.Payload fetchSearch(SearchRanker.Query query,String filter,SearchSignals signals)throws Exception {
     List<java.util.concurrent.Future<SearchPart>> tasks=new ArrayList<>();
     if(filter.equals("All"))for(SearchRanker.Type type:List.of(SearchRanker.Type.SONG,SearchRanker.Type.ARTIST,
         SearchRanker.Type.ALBUM,SearchRanker.Type.PLAYLIST,SearchRanker.Type.PODCAST))tasks.add(searchPart(query,type));
@@ -1077,7 +1064,7 @@ public final class MainActivity extends Activity {
     try{for(var task:tasks){SearchPart part=task.get();music.addAll(part.music());shows.addAll(part.podcasts());if(!part.error().isBlank())errors.add(part.error());}}
     catch(InterruptedException cancelled){for(var task:tasks)task.cancel(true);throw cancelled;}
     catch(java.util.concurrent.ExecutionException failure){throw new Exception(failure.getCause());}
-    return new SearchPayload(music,shows,rankSearch(query,music,shows,signals,filter.equals("All")),String.join("\n",new java.util.LinkedHashSet<>(errors)));
+    return new SearchViewModel.Payload(music,shows,rankSearch(query,music,shows,signals,filter.equals("All")),String.join("\n",new java.util.LinkedHashSet<>(errors)));
   }
 
   private record SearchPart(List<MusicCatalog.Entry> music,List<Podcasts.Show> podcasts,String error) {}
@@ -1113,7 +1100,7 @@ public final class MainActivity extends Activity {
     return new SearchSignals(Set.copyOf(liked),Set.copyOf(downloaded),Set.copyOf(recent),Set.copyOf(subscribed),preferred);
   }
 
-  private List<SearchItem> rankSearch(SearchRanker.Query query,List<MusicCatalog.Entry> music,List<Podcasts.Show> shows,
+  private List<SearchViewModel.Item> rankSearch(SearchRanker.Query query,List<MusicCatalog.Entry> music,List<Podcasts.Show> shows,
       SearchSignals signals,boolean allTab) {
     List<SearchRanker.Document> documents=new ArrayList<>();java.util.Map<String,MusicCatalog.Entry> musicById=new java.util.HashMap<>();
     java.util.Map<String,Podcasts.Show> podcastsById=new java.util.HashMap<>();int index=0;
@@ -1124,8 +1111,8 @@ public final class MainActivity extends Activity {
           signals.liked().contains(source),signals.downloaded().contains(source),signals.recent().contains(searchKey(entry)),false));}
     for(Podcasts.Show show:shows){String id="podcast:"+(index++)+":"+show.feedUrl;podcastsById.put(id,show);
       documents.add(new SearchRanker.Document(id,SearchRanker.Type.PODCAST,show.title,show.author,"","","", "",0,false,false,false,signals.subscribed().contains(show.feedUrl)));}
-    List<SearchItem> result=new ArrayList<>();for(SearchRanker.Ranked ranked:SearchRanker.rank(query,documents,allTab))
-      result.add(new SearchItem(ranked,musicById.get(ranked.document().id()),podcastsById.get(ranked.document().id())));
+    List<SearchViewModel.Item> result=new ArrayList<>();for(SearchRanker.Ranked ranked:SearchRanker.rank(query,documents,allTab))
+      result.add(new SearchViewModel.Item(ranked,musicById.get(ranked.document().id()),podcastsById.get(ranked.document().id())));
     return result;
   }
 
@@ -1133,9 +1120,11 @@ public final class MainActivity extends Activity {
     if(page.equals("Search")&&searchQueryView!=null&&searchQueryView.isAttachedToWindow()){
       renderSearchResults();return;
     }
+    SearchViewModel.UiState state=searchViewModel.state().getValue();
+    searchText=state.query();searchFilter=state.filter();
     clear("Search", "");
     largeTitle("Search", "Find music, artists, playlists and podcasts.");
-    searchBox("Search", searchText, true);
+    searchBox("Search", state.query(), true);
     gap(16);
     android.widget.HorizontalScrollView sc = new android.widget.HorizontalScrollView(this);
     sc.setHorizontalScrollBarEnabled(false);
@@ -1147,20 +1136,26 @@ public final class MainActivity extends Activity {
 
   private void renderSearchResults() {
     if(searchResultsBody==null)return;
+    SearchViewModel.UiState state=searchViewModel.state().getValue();
+    searchText=state.query();searchFilter=state.filter();searchLoading=state.phase()==SearchViewModel.Phase.LOADING;
+    searchError=state.message();catalogResults=new ArrayList<>(state.payload().music());
+    podcastResults=new ArrayList<>(state.payload().podcasts());rankedSearch=new ArrayList<>(state.payload().ranked());
+    searchResultsBody.setVisibility(View.VISIBLE);
     searchResultsBody.removeAllViews();
     LinearLayout outer = body; body = searchResultsBody;
     try {
-      if (searchText.isBlank()) { renderRecents(body); return; }
+      if (state.phase()==SearchViewModel.Phase.IDLE||searchText.isBlank()) { renderRecents(body); return; }
+      if(state.phase()==SearchViewModel.Phase.TYPING)return;
       if(rankedSearch.isEmpty()&&(!catalogResults.isEmpty()||!podcastResults.isEmpty()))
         rankedSearch=rankSearch(SearchRanker.parse(searchText),catalogResults,podcastResults,searchSignals(),searchFilter.equals("All"));
-      if (searchLoading&&rankedSearch.isEmpty()) { body.addView(new SkeletonView(this,false)); return; }
-      if(searchLoading){body.addView(new SkeletonView(this,false));gap(8);}
-      if (!searchError.isEmpty()) {
+      if (state.phase()==SearchViewModel.Phase.LOADING&&rankedSearch.isEmpty()) { body.addView(new SkeletonView(this,false)); return; }
+      if(state.phase()==SearchViewModel.Phase.LOADING){body.addView(new SkeletonView(this,false));gap(8);}
+      if (state.phase()==SearchViewModel.Phase.ERROR) {
         body.addView(text(searchError,14,MUTED,false));
-        body.addView(button("Retry search",false,this::searchMusic));gap(12);
+        body.addView(button("Retry",false,searchViewModel::retry));gap(12);
         if(rankedSearch.isEmpty())return;
       }
-      if (rankedSearch.isEmpty()) {
+      if (state.phase()==SearchViewModel.Phase.EMPTY||rankedSearch.isEmpty()) {
         searchEmptyState(body,"No matches yet","Try a shorter title, another spelling, or one of these suggestions.");
         return;
       }
@@ -1168,12 +1163,12 @@ public final class MainActivity extends Activity {
     } finally { body = outer; }
   }
 
-  private void refreshSearchFilterChips(){if(searchFilterChips==null)return;searchFilterChips.removeAllViews();for(String filter:List.of("All","Songs","Albums","Artists","Playlists","Podcasts"))searchFilterChips.addView(chip(filter,searchFilter.equals(filter),()->{searchFilter=filter;searchError="";refreshSearchFilterChips();renderSearchResults();searchMusic();}));}
+  private void refreshSearchFilterChips(){if(searchFilterChips==null||searchViewModel==null)return;String selected=searchViewModel.state().getValue().filter();searchFilterChips.removeAllViews();for(String filter:List.of("All","Songs","Albums","Artists","Playlists","Podcasts"))searchFilterChips.addView(chip(filter,selected.equals(filter),()->searchViewModel.selectFilter(filter)));}
 
   private void renderAllSearch() {
-    SearchItem top=rankedSearch.get(0);searchHeading("Top result",null);topResultCard(top);gap(22);
-    java.util.Map<SearchRanker.Type,List<SearchItem>> sections=new java.util.EnumMap<>(SearchRanker.Type.class);
-    for(SearchItem item:rankedSearch)if(item!=top)sections.computeIfAbsent(item.ranking().document().type(),ignored->new ArrayList<>()).add(item);
+    SearchViewModel.Item top=rankedSearch.get(0);searchHeading("Top result",null);topResultCard(top);gap(22);
+    java.util.Map<SearchRanker.Type,List<SearchViewModel.Item>> sections=new java.util.EnumMap<>(SearchRanker.Type.class);
+    for(SearchViewModel.Item item:rankedSearch)if(item!=top)sections.computeIfAbsent(item.ranking().document().type(),ignored->new ArrayList<>()).add(item);
     List<SearchRanker.Type> order=new ArrayList<>(sections.keySet());order.sort(Comparator
         .<SearchRanker.Type>comparingDouble(type->sections.get(type).get(0).ranking().score()).reversed()
         .thenComparingInt(type->List.of(SearchRanker.Type.SONG,SearchRanker.Type.ARTIST,SearchRanker.Type.ALBUM,SearchRanker.Type.PLAYLIST,SearchRanker.Type.PODCAST).indexOf(type)));
@@ -1181,16 +1176,16 @@ public final class MainActivity extends Activity {
   }
 
   private void renderTypedSearch(SearchRanker.Type type) {
-    List<SearchItem> items=rankedSearch.stream().filter(item->item.ranking().document().type()==type).toList();
+    List<SearchViewModel.Item> items=rankedSearch.stream().filter(item->item.ranking().document().type()==type).toList();
     searchHeading(type.label,null);gap(6);
-    for(SearchItem item:items)searchItemRow(item);
+    for(SearchViewModel.Item item:items)searchItemRow(item);
   }
 
-  private void renderSearchSection(SearchRanker.Type type,List<SearchItem> items) {
-    if(items.isEmpty())return;searchHeading(type.label,()->{searchFilter=type.label;refreshSearchFilterChips();renderSearchResults();searchMusic();});gap(6);
+  private void renderSearchSection(SearchRanker.Type type,List<SearchViewModel.Item> items) {
+    if(items.isEmpty())return;searchHeading(type.label,()->searchViewModel.selectFilter(type.label));gap(6);
     int limit=switch(type){case SONG->5;case ARTIST,PLAYLIST,PODCAST->3;case ALBUM->10;};
-    List<SearchItem> visible=items.subList(0,Math.min(limit,items.size()));
-    if(type==SearchRanker.Type.ALBUM)searchAlbumShelf(visible);else for(SearchItem item:visible)searchItemRow(item);
+    List<SearchViewModel.Item> visible=items.subList(0,Math.min(limit,items.size()));
+    if(type==SearchRanker.Type.ALBUM)searchAlbumShelf(visible);else for(SearchViewModel.Item item:visible)searchItemRow(item);
     gap(20);
   }
 
@@ -1201,7 +1196,7 @@ public final class MainActivity extends Activity {
     body.addView(heading);
   }
 
-  private void topResultCard(SearchItem item) {
+  private void topResultCard(SearchViewModel.Item item) {
     LinearLayout card=row();card.setPadding(dp(14),dp(14),dp(8),dp(14));card.setBackground(ripple(CARD,UiStyle.RADIUS_CARD));
     Artwork art=new Artwork(this);if(item.ranking().document().type()==SearchRanker.Type.ARTIST)art.circle();
     art.load(item.music()!=null?item.music().artwork:item.podcast().artwork);card.addView(art,new LinearLayout.LayoutParams(dp(76),dp(76)));
@@ -1214,19 +1209,19 @@ public final class MainActivity extends Activity {
     card.setOnClickListener(v->openSearchItem(item));body.addView(card);
   }
 
-  private void searchItemRow(SearchItem item) {
+  private void searchItemRow(SearchViewModel.Item item) {
     if(item.music()!=null)searchEntryRow(body,item.music(),false);
     else podcastCard(body,item.podcast(),()->previewPodcast(item.podcast().feedUrl));
   }
 
-  private void openSearchItem(SearchItem item) {
+  private void openSearchItem(SearchViewModel.Item item) {
     if(item.music()!=null){searchHistory.remember(item.music());if(item.music().track!=null)playRadio(item.music().track);else openCollection(item.music());}
     else previewPodcast(item.podcast().feedUrl);
   }
 
-  private void searchAlbumShelf(List<SearchItem> items) {
+  private void searchAlbumShelf(List<SearchViewModel.Item> items) {
     android.widget.HorizontalScrollView scroll=new android.widget.HorizontalScrollView(this);LinearLayout cards=row();cards.setGravity(Gravity.TOP);
-    for(SearchItem item:items){MusicCatalog.Entry entry=item.music();LinearLayout card=column();Artwork art=new Artwork(this);art.load(entry.artwork);card.addView(art,new LinearLayout.LayoutParams(dp(146),dp(146)));
+    for(SearchViewModel.Item item:items){MusicCatalog.Entry entry=item.music();LinearLayout card=column();Artwork art=new Artwork(this);art.load(entry.artwork);card.addView(art,new LinearLayout.LayoutParams(dp(146),dp(146)));
       TextView title=text(entry.title,UiStyle.BODY,INK,true);title.setMaxLines(2);title.setEllipsize(android.text.TextUtils.TruncateAt.END);title.setPadding(0,dp(8),0,0);card.addView(title);
       TextView artist=text(entry.artist,UiStyle.CAPTION,MUTED,false);artist.setSingleLine(true);artist.setEllipsize(android.text.TextUtils.TruncateAt.END);card.addView(artist);
       card.setBackground(ripple(Color.TRANSPARENT,UiStyle.RADIUS_CARD));card.setOnClickListener(v->openSearchItem(item));LinearLayout.LayoutParams size=new LinearLayout.LayoutParams(dp(154),-2);size.setMargins(0,0,dp(16),0);cards.addView(card,size);}
@@ -1657,7 +1652,7 @@ public final class MainActivity extends Activity {
                           "Search words",
                           wanted.searchQuery(),
                           query -> {
-                            searchText = query;
+                            searchViewModel.startNewSearch(query);
                             searchResults.clear();
                             navigate("Search");
                             toast(
@@ -3812,7 +3807,7 @@ public final class MainActivity extends Activity {
     LinearLayout suggestions=row();suggestions.setGravity(Gravity.CENTER);
     suggestions.addView(chip("New music",false,()->runMusicSearch("new music")));
     suggestions.addView(chip("Chill",false,()->runMusicSearch("chill")));
-    suggestions.addView(chip("Podcasts",false,()->{searchFilter="Podcasts";refreshSearchFilterChips();renderSearchResults();searchMusic();}));
+    suggestions.addView(chip("Podcasts",false,()->searchViewModel.selectFilter("Podcasts")));
     suggestionScroll.addView(suggestions);state.addView(suggestionScroll,new LinearLayout.LayoutParams(-1,-2));
     target.addView(state,new LinearLayout.LayoutParams(-1,-2));
   }
@@ -3859,7 +3854,7 @@ public final class MainActivity extends Activity {
   }
 
   private void restoreScreen(Bundle state) {
-    if(state==null){showHome();return;}searchText=state.getString("searchText","");searchFilter=state.getString("searchFilter","All");
+    if(state==null){showHome();return;}searchViewModel.restore(state.getString("searchText",""),state.getString("searchFilter","All"),state.getInt("searchScroll",0));
     libraryFilter=state.getString("libraryFilter","Playlists");
     homeTab=state.getString("homeTab","Music");
     ArrayList<Bundle> history=state.getParcelableArrayList("screenHistory");if(history!=null){screenHistory.clear();screenHistory.addAll(history);}
@@ -3868,7 +3863,7 @@ public final class MainActivity extends Activity {
     if(name.equals("Collection")&&collectionEntry!=null){boolean previous=restoringScreen;restoringScreen=true;try{openCollection(collectionEntry);}finally{restoringScreen=previous;}}
     else if(name.equals("Download queue"))showDownloadQueue();
     else if(name.equals("Settings"))settings();else if(name.equals("Accent colour"))showAccentPicker(false);else if(name.equals("Profile"))showProfile();
-    else if(name.equals("Search")){showSearch();if(!searchText.isBlank()&&catalogResults.isEmpty())searchMusic();}
+    else if(name.equals("Search")){showSearch();SearchViewModel.UiState search=searchViewModel.state().getValue();if(!search.query().isBlank()&&search.payload().ranked().isEmpty())searchViewModel.retry();}
     else if(name.equals("Playlist")){String id=state.getString("playlist","");if(id.equals(SongDownloads.PLAYLIST_ID))showPlaylist(songDownloads.playlist());else {Library.Playlist found=library.playlists.stream().filter(x->x.id.equals(id)).findFirst().orElse(null);if(found!=null)showPlaylist(found);else showLibrary();}}
     else if(name.equals("Show")){String feed=state.getString("feed","");Podcasts.Show found=podcasts.knownShows().stream().filter(x->x.feedUrl.equals(feed)).findFirst().orElse(null);if(found!=null)showPodcast(found);else showPodcasts();}
     else {boolean previous=restoringScreen;restoringScreen=true;try{navigate(name);}finally{restoringScreen=previous;}}
@@ -3879,7 +3874,7 @@ public final class MainActivity extends Activity {
     Bundle saved=captureScreen();screenHistory.add(saved);
   }
   private Bundle captureScreen() {
-    Bundle out=new Bundle();out.putString("page",page);out.putString("searchText",searchText);out.putString("searchFilter",searchFilter);out.putString("homeTab",homeTab);out.putString("libraryFilter",libraryFilter);
+    Bundle out=new Bundle();SearchViewModel.UiState search=searchViewModel.state().getValue();out.putString("page",page);out.putString("searchText",search.query());out.putString("searchFilter",search.filter());out.putInt("searchScroll",search.scrollPosition());out.putString("homeTab",homeTab);out.putString("libraryFilter",libraryFilter);
     out.putInt("scroll",mainScroll==null?0:mainScroll.getScrollY());
     if(collectionEntry!=null)out.putString("collection",new com.google.gson.Gson().toJson(collectionEntry));
     if(shownPlaylist!=null)out.putString("playlist",shownPlaylist.id);if(shownShow!=null)out.putString("feed",shownShow.feedUrl);return out;
