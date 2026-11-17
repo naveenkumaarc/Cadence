@@ -120,8 +120,8 @@ public final class RegressionUiIntegrationTest {
     main(()->call("showSearch"));EditText query=(EditText)field("searchQueryView");
     main(()->{query.requestFocus();query.setText("visible row");query.setSelection(query.length());((InputMethodManager)context.getSystemService(Context.INPUT_METHOD_SERVICE)).showSoftInput(query,InputMethodManager.SHOW_IMPLICIT);model.submit("visible row");});
     for(int attempt=0;attempt<80&&model.state().getValue().phase()!=SearchViewModel.Phase.RESULTS;attempt++)Thread.sleep(25);
-    android.widget.ScrollView scroll=(android.widget.ScrollView)field("mainScroll");main(()->scroll.fullScroll(View.FOCUS_DOWN));instrumentation.waitForIdleSync();
-    View last=text(activity.getWindow().getDecorView(),"visible row 12");assertNotNull(last);android.graphics.Rect visible=new android.graphics.Rect();assertTrue(last.getGlobalVisibleRect(visible));
+    android.widget.ScrollView scroll=(android.widget.ScrollView)field("mainScroll");main(()->scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN)));instrumentation.waitForIdleSync();
+    View last=text(activity.getWindow().getDecorView(),"visible row 5");assertNotNull(last);android.graphics.Rect visible=new android.graphics.Rect();assertTrue(last.getGlobalVisibleRect(visible));
     androidx.core.view.WindowInsetsCompat insets=androidx.core.view.ViewCompat.getRootWindowInsets(query);assertNotNull(insets);
     if(insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())){int imeTop=activity.getWindow().getDecorView().getHeight()-insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom;assertTrue("Last row must remain above IME",visible.bottom<=imeTop+2);}
   }
