@@ -1,0 +1,6 @@
+Cadence 2.6.1 is signed with the retained Cadence release key.
+Install Cadence-2.6.1.apk over an earlier release-signed Cadence installation without uninstalling.
+Package: app.cadence.player. Version code: 17.
+Signer SHA-256: 26d127669bb122cc6768726c3b8a4a2573e3edf62c10cc20d8d8e90a84c1024f
+APK SHA-256: e6e0303d06d500e6f439d73ed2ed7a5755b070ddb6762d855205379a869fe81c
+Back up important library and podcast progress before any application update.

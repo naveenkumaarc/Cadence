@@ -19,7 +19,7 @@ Cadence provides matching Light, Dark and System themes across Home, Search, Lib
 - Optional Google Drive sync, named backups and compatible local backup/restore
 - Light, Dark and System themes, custom accent colors, motion and touch-feedback controls
 
-Cadence 2.6.0 is available as a signed update: [download APK](https://github.com/naveenkumaarc/Cadence/releases/download/v2.6.0/Cadence-2.6.0.apk) · [SHA-256](downloads/SHA256SUMS-2.6.0.txt) · [install notes](downloads/READ-BEFORE-INSTALLING-2.6.0.txt). It uses the retained release certificate and can update earlier release-signed Cadence installations without uninstalling.
+Cadence 2.6.1 is available as a signed update: [download APK](https://github.com/naveenkumaarc/Cadence/releases/download/v2.6.1/Cadence-2.6.1.apk) · [SHA-256](downloads/SHA256SUMS-2.6.1.txt) · [install notes](downloads/READ-BEFORE-INSTALLING-2.6.1.txt). It uses the retained release certificate and can update earlier release-signed Cadence installations without uninstalling.
 
 Version history and verification reports live in [docs](docs/). Future signed binary artifacts should move to GitHub Releases so the source checkout stays small; historical APKs and checksums are retained unchanged.
 
@@ -55,7 +55,7 @@ bash tools/run-native-checks.sh
 - `examples/` — sample import files.
 - `tools/` — repeatable transfer and connected-device verification helpers.
 
-Maintainer notes: [Google configuration](GOOGLE-CONFIG.md) · [privacy](PRIVACY.md) · [project structure](docs/PROJECT-STRUCTURE.md) · [2.6.0 release notes](docs/RELEASE-NOTES-2.6.0.md).
+Maintainer notes: [Google configuration](GOOGLE-CONFIG.md) · [privacy](PRIVACY.md) · [project structure](docs/PROJECT-STRUCTURE.md) · [2.6.1 release notes](docs/RELEASE-NOTES-2.6.1.md).
 
 ## License
 
